@@ -2,7 +2,15 @@ from unittest import TestCase
 from twilio import twiml
 import xml.etree.ElementTree as ET
 
-from vumi_twilio_api.twiml_parser import TwiMLParser, TwiMLParseError
+from vumi_twilio_api.twiml_parser import TwiMLParser, TwiMLParseError, Verb
+
+
+class TestVerb(TestCase):
+    def test_verb_defaults(self):
+        verb = Verb("Say")
+        self.assertEqual(verb.verb, "Say")
+        self.assertEqual(verb.attributes, {})
+        self.assertEqual(verb.nouns, {})
 
 
 class TestParser(TestCase):
