@@ -1,0 +1,46 @@
+import sys
+from unittest import TestCase
+from twilio import twiml
+import xml.etree.ElementTree as ET
+
+from vumi_twilio_api.twilml_parser import TwilMLParser, TwilMLParseError
+
+class TestParser(TestCase):
+    def setUp(self):
+        self.parser = TwilMLParser()
+        self.response = twiml.Response()
+
+    def test_invalid_root(self):
+        """An invalid root raises an exception"""
+        root = ET.Element('foobar')
+        xml = ET.tostring(root)
+        try:
+            self.parser.parse(xml)
+        except TwilMLParseError as e:
+            pass
+        self.assertTrue(isinstance(e, TwilMLParseError))
+        self.assertEqual(
+            e.args[0], "Invalid root 'foobar'. Should be 'Request'.")
+
+    def test_default_parse(self):
+        """The default parse function is called when a verb parser cannot be
+        found"""
+        if getattr(self.parser, '_parse_Say', None):
+            self.parser._parse_Say = None
+        self.response.say("Foobar")
+        try:
+            self.parser.parse(str(self.response))
+        except TwilMLParseError as e:
+            pass
+        self.assertTrue(isinstance(e, TwilMLParseError))
+        self.assertEqual(e.args[0], "Cannot find parser for verb 'Say'")
+
+    def test_verb_parse(self):
+        """The correct parse function is called when parsing"""
+        def dummy_parser(element):
+            return "dummy_parser"
+        self.parser._parse_Say = dummy_parser
+        self.response.say("Foobar")
+        [result] = self.parser.parse(str(self.response))
+        self.assertEqual(result, "dummy_parser")
+

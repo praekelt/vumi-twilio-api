@@ -17,7 +17,7 @@ class TwilMLParseError(Exception):
 class TwilMLParser(object):
     """Parser for TwilML"""
 
-    def parse_xml(self, xml):
+    def parse(self, xml):
         """Parses TwilML and returns a list of :class:`Verb` objects"""
         verbs = []
         root = ET.fromstring(xml)
@@ -31,4 +31,4 @@ class TwilMLParser(object):
         return verbs
 
     def _parse_default(self, element):
-        raise TwilMLParseError("Unable to parse verb %r" % element.tag)
+        raise TwilMLParseError("Cannot find parser for verb %r" % element.tag)
