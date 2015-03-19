@@ -6,7 +6,7 @@ setup(
     url="https://github.com/praekelt/vumi-twilio-api",
     license="BSD",
     description="Provides a REST API to Vumi that emulates the Twilio API",
-    long_description=open("README.md", "r").read(),
+    long_description=open("README.rst", "r").read(),
     author="Praekelt Foundation",
     author_email="dev@praekeltfoundation.org",
     packages=find_packages(),
