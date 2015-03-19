@@ -2,12 +2,12 @@ from unittest import TestCase
 from twilio import twiml
 import xml.etree.ElementTree as ET
 
-from vumi_twilio_api.twilml_parser import TwilMLParser, TwilMLParseError
+from vumi_twilio_api.twiml_parser import TwiMLParser, TwiMLParseError
 
 
 class TestParser(TestCase):
     def setUp(self):
-        self.parser = TwilMLParser()
+        self.parser = TwiMLParser()
         self.response = twiml.Response()
 
     def test_invalid_root(self):
@@ -16,9 +16,9 @@ class TestParser(TestCase):
         xml = ET.tostring(root)
         try:
             self.parser.parse(xml)
-        except TwilMLParseError as e:
+        except TwiMLParseError as e:
             pass
-        self.assertTrue(isinstance(e, TwilMLParseError))
+        self.assertTrue(isinstance(e, TwiMLParseError))
         self.assertEqual(
             e.args[0], "Invalid root 'foobar'. Should be 'Request'.")
 
@@ -30,9 +30,9 @@ class TestParser(TestCase):
         self.response.say("Foobar")
         try:
             self.parser.parse(str(self.response))
-        except TwilMLParseError as e:
+        except TwiMLParseError as e:
             pass
-        self.assertTrue(isinstance(e, TwilMLParseError))
+        self.assertTrue(isinstance(e, TwiMLParseError))
         self.assertEqual(e.args[0], "Cannot find parser for verb 'Say'")
 
     def test_verb_parse(self):

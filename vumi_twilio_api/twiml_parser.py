@@ -10,19 +10,19 @@ class Verb(object):
         self.nouns = nouns
 
 
-class TwilMLParseError(Exception):
+class TwiMLParseError(Exception):
     """Raised when trying to parse invalid TwilML"""
 
 
-class TwilMLParser(object):
-    """Parser for TwilML"""
+class TwiMLParser(object):
+    """Parser for TwiML"""
 
     def parse(self, xml):
-        """Parses TwilML and returns a list of :class:`Verb` objects"""
+        """Parses TwiML and returns a list of :class:`Verb` objects"""
         verbs = []
         root = ET.fromstring(xml)
         if root.tag != "Response":
-            raise TwilMLParseError(
+            raise TwiMLParseError(
                 "Invalid root %r. Should be 'Request'." % root.tag)
         for child in root:
             parser = getattr(
@@ -31,4 +31,4 @@ class TwilMLParser(object):
         return verbs
 
     def _parse_default(self, element):
-        raise TwilMLParseError("Cannot find parser for verb %r" % element.tag)
+        raise TwiMLParseError("Cannot find parser for verb %r" % element.tag)
