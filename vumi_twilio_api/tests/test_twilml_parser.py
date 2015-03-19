@@ -1,9 +1,9 @@
-import sys
 from unittest import TestCase
 from twilio import twiml
 import xml.etree.ElementTree as ET
 
 from vumi_twilio_api.twilml_parser import TwilMLParser, TwilMLParseError
+
 
 class TestParser(TestCase):
     def setUp(self):
@@ -43,4 +43,3 @@ class TestParser(TestCase):
         self.response.say("Foobar")
         [result] = self.parser.parse(str(self.response))
         self.assertEqual(result, "dummy_parser")
-
