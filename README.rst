@@ -21,4 +21,4 @@ To run the tests::
 
     $ python setup.py install
     $ pip install -r requirements-dev.pip
-    $ py.test vumi_twilio_api
+    $ trial vumi_twilio_api
