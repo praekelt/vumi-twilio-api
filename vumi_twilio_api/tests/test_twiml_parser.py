@@ -1,4 +1,4 @@
-from unittest import TestCase
+from twisted.trial.unittest import TestCase
 from twilio import twiml
 import xml.etree.ElementTree as ET
 

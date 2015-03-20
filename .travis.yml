@@ -8,6 +8,6 @@ install:
   - "pip install coveralls"
   - "python setup.py install"
 script:
-  - "coverage run --source=vumi_twilio_api `which py.test` vumi_twilio_api"
+  - "coverage run --source=vumi_twilio_api `which trial` vumi_twilio_api"
 after_success:
   - coveralls
