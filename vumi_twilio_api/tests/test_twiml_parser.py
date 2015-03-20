@@ -7,6 +7,7 @@ from vumi_twilio_api.twiml_parser import TwiMLParser, TwiMLParseError, Verb
 
 class TestVerb(TestCase):
     def test_verb_defaults(self):
+        """Defaults are set correctly when no args are given"""
         verb = Verb("Say")
         self.assertEqual(verb.verb, "Say")
         self.assertEqual(verb.attributes, {})
@@ -22,11 +23,7 @@ class TestParser(TestCase):
         """An invalid root raises an exception"""
         root = ET.Element('foobar')
         xml = ET.tostring(root)
-        try:
-            self.parser.parse(xml)
-        except TwiMLParseError as e:
-            pass
-        self.assertTrue(isinstance(e, TwiMLParseError))
+        e = self.assertRaises(TwiMLParseError, self.parser.parse, xml)
         self.assertEqual(
             e.args[0], "Invalid root 'foobar'. Should be 'Request'.")
 
@@ -36,11 +33,8 @@ class TestParser(TestCase):
         if getattr(self.parser, '_parse_Say', None):
             self.parser._parse_Say = None
         self.response.say("Foobar")
-        try:
-            self.parser.parse(str(self.response))
-        except TwiMLParseError as e:
-            pass
-        self.assertTrue(isinstance(e, TwiMLParseError))
+        e = self.assertRaises(
+            TwiMLParseError, self.parser.parse, str(self.response))
         self.assertEqual(e.args[0], "Cannot find parser for verb 'Say'")
 
     def test_verb_parse(self):
