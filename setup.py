@@ -11,7 +11,10 @@ setup(
     author_email="dev@praekeltfoundation.org",
     packages=find_packages(),
     scripts=[],
-    install_requires=[],
+    install_requires=[
+        'vumi',
+        'klein',
+    ],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
