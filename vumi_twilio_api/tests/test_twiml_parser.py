@@ -30,11 +30,10 @@ class TestParser(TestCase):
     def test_default_parse(self):
         """The default parse function is called when a verb parser cannot be
         found"""
-        self.parser._parse_Say = None
-        self.response.say("Foobar")
+        self.response.sms("Foobar")
         e = self.assertRaises(
             TwiMLParseError, self.parser.parse, str(self.response))
-        self.assertEqual(e.args[0], "Cannot find parser for verb 'Say'")
+        self.assertEqual(e.args[0], "Cannot find parser for verb 'Sms'")
 
     def test_verb_parse(self):
         """The correct parse function is called when parsing"""
