@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="vumi_twilio_api",
+    name="vxtwinio",
     version="0.0.1a",
     url="https://github.com/praekelt/vumi-twilio-api",
     license="BSD",
