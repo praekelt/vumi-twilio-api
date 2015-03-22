@@ -1,6 +1,7 @@
 from klein import Klein
 from vumi.application import ApplicationWorker
 from vumi.config import ConfigInt, ConfigText
+import xml.etree.ElementTree as ET
 
 class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
     """Config for the Twilio API worker"""
@@ -34,11 +35,31 @@ class TwilioAPIServer(object):
 
     def __init__(self, vumi_worker):
         self.vumi_worker = vumi_worker
-    
-    @app.route('/Accounts/<string:account_sid>/Calls<string:form>', methods=['POST'])
-    def create_call(self, request, account_sid, form):
-        print request
-        print account_sid
-        print form
-        return ''
 
+    @staticmethod
+    def format_xml(dct, root=None):
+        if root is None:
+            root = ET.Element('TwilioResponse')
+        for key, value in dct.iteritems():
+            if isinstance(value, dict):
+                sub = ET.SubElement(root, key)
+                TwilioAPIServer.dict_to_xml(value, root=sub)
+            else:
+                sub = ET.SubElement(root, key)
+                sub.text = value
+        return ET.tostring(root)
+
+    @staticmethod
+    def format_json(dct):
+        return json.dumps(dct)
+
+    def _format_response(self, dct, format_):
+        format_ = format_.lstrip('.').lowercase()
+        func = getattr(TwilioAPIServer, 'format' + format_)
+        return func(dct)
+
+    @app.route('/', defaults={'format_': 'xml'}, methods=['GET'])
+    @app.route('/<string:format_>', methods=['GET'])
+    def root(self, request, format_):
+        ret = {}
+        return self._format_response(ret, format_)
