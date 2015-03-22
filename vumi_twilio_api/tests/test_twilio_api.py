@@ -1,3 +1,4 @@
+import treq
 from twilio.rest import TwilioRestClient
 from twisted.internet.defer import inlineCallbacks
 from twisted.trial.unittest import TestCase
@@ -19,11 +20,13 @@ class TwilioAPIServer(VumiTestCase):
             'web_port': 8080
         })
         addr = self.worker.webserver.getHost()
-        url = 'http://%s:%s%s' % (addr.host, addr.port, '/api')
+        self.url = 'http://%s:%s%s' % (addr.host, addr.port, '/api')
         account = "TestAccount"
         token = "test_account_token"
-        self.client = TwilioRestClient(account, token, base=url, version='v1') 
+        self.client = TwilioRestClient(account, token, base=self.url, version='v1') 
 
+    @inlineCallbacks
     def test_create_call(self):
-        self.client.calls.create(to='+12345', from_="+54321", url="http://example.org/call.xml")
+        response = yield treq.get(self.url + '/v1')
+        print response
 

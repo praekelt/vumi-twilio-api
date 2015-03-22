@@ -54,8 +54,8 @@ class TwilioAPIServer(object):
         return json.dumps(dct)
 
     def _format_response(self, dct, format_):
-        format_ = format_.lstrip('.').lowercase()
-        func = getattr(TwilioAPIServer, 'format' + format_)
+        format_ = format_.lstrip('.').lower()
+        func = getattr(TwilioAPIServer, 'format_' + format_, TwilioAPIServer.format_xml)
         return func(dct)
 
     @app.route('/', defaults={'format_': 'xml'}, methods=['GET'])
