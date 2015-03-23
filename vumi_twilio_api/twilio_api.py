@@ -1,3 +1,4 @@
+import json
 from klein import Klein
 from vumi.application import ApplicationWorker
 from vumi.config import ConfigInt, ConfigText
@@ -43,7 +44,7 @@ class TwilioAPIServer(object):
         for key, value in dct.iteritems():
             if isinstance(value, dict):
                 sub = ET.SubElement(root, key)
-                TwilioAPIServer.dict_to_xml(value, root=sub)
+                TwilioAPIServer.format_xml(value, root=sub)
             else:
                 sub = ET.SubElement(root, key)
                 sub.text = value
