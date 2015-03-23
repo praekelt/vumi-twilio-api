@@ -1,5 +1,6 @@
 import json
 from klein import Klein
+import re
 from twisted.internet.defer import inlineCallbacks
 from vumi.application import ApplicationWorker
 from vumi.config import ConfigInt, ConfigText
@@ -89,3 +90,67 @@ class TwilioAPIServer(object):
     def root(self, request, format_):
         ret = {}
         return self._format_response(request, ret, format_)
+
+    @app.route(
+        '/Accounts/<string:account_sid>/Calls',
+        defaults={'format_': 'xml'},
+        methods=['POST'])
+    @app.route(
+        '/Accounts/<string:account_sid>/Calls<string:format_>',
+        methods=['POST'])
+    def make_call(self, request, account_sid, format_):
+        fields = _validate_make_call_fields(request, format_)
+
+    def _get_field(self, request, field, default=None):
+        return request.args.get(field, [default])[0]
+
+    def _validate_make_call_required_fields(self, request, format_):
+        """Validates the required fields as detailed by
+        https://www.twilio.com/docs/api/rest/making-calls#post-parameters-required
+        """
+        #TODO: Support 'ApplicationSid' parameter
+        required_fields = ['From', 'To', 'Url']
+        fields = {}
+        for field in required_fields:
+            value = self._get_field(request, field)
+            if not value:
+                raise TwilioAPIUsageException(
+                    'Required field %r not supplied' % field,
+                    format_)
+            fields[field] = value
+        return fields
+
+    def _validate_make_call_optional_fields(self, request, format_):
+        """Validates the required fields as detailed by
+        https://www.twilio.com/docs/api/rest/making-calls#post-parameters-optional
+        """
+        fields = {}
+        fields['Method'] = self._get_field('Method', 'POST')
+        fields['FallbackUrl'] = self._get_field('FallbackUrl')
+        fields['FallbackMethod'] = self._get_field('FallbackMethod', 'POST')
+        fields['StatusCallback'] = self._get_field('StatusCallback')
+        fields['StatusCallbackMethod'] = self._get_field(
+            'StatusCallbackMethod', 'POST')
+        fields['SendDigits'] = self._get_field('SendDigits')
+        if fields['SendDigits']:
+            if not all(re.match('[0-9#*w]', c) for c in fields['SendDigits']):
+                raise TwilioAPIUsageException(
+                    "SendDigits value %r is not valid. May only contain the "
+                    "characters (0-9), '#', '*' and 'w'" % fields['SendDigits'],
+                    format_)
+        fields['IfMachine'] = self._get_field('IfMachine')
+        valid_fields_IfMachine = [None, 'Continue', 'Hangup']
+        if not fields['IfMachine'] in valid_fields_IfMachine:
+            raise TwilioAPIUsageException(
+                "IfMachine value must be one of %r" % valid_fields_IfMachine,
+                format_)
+        fields['Timeout'] = self._get_field('Timeout', 60)
+        fields['Record'] = self._get_field('Record', False)
+
+    def _validate_make_call_fields(self, request, format_):
+        """Validates the fields sent to the request according to
+        https://www.twilio.com/docs/api/rest/making-calls"""
+        fields =  self._validate_make_call_required_fields(request, format_)
+        fields.update(self._validate_make_call_optional_fields(request, format_))
+        return fields
+
