@@ -60,6 +60,22 @@ class TestTwilioAPIServer(VumiTestCase):
         content = yield response.json()
         self.assertEqual(content, {})
 
+    @inlineCallbacks
+    def test_root_invalid_format(self):
+        response = yield self._server_request('.foo')
+        self.assertEqual(
+            response.headers.getRawHeaders('content-type'),
+            ['application/xml'])
+        self.assertEqual(response.code, 400)
+        content = yield response.content()
+        root = ET.fromstring(content)
+        [error_message, error_type] = sorted(root, key=lambda c: c.tag)
+        self.assertEqual(error_message.tag, 'error_message')
+        self.assertEqual(
+            error_message.text, "'foo' is not a valid request format")
+        self.assertEqual(error_type.tag, 'error_type')
+        self.assertEqual(error_type.text, 'UsageError')
+
 
 class TestServerFormatting(TestCase):
 

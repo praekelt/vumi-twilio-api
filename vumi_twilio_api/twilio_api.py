@@ -34,6 +34,13 @@ class TwilioAPIWorker(ApplicationWorker):
         yield self.webserver.loseConnection()
 
 
+class TwilioAPIUsageException(Exception):
+    """Called when in incorrect query is sent to the API"""
+    def __init__(self, message, format_='xml'):
+        super(TwilioAPIUsageException, self).__init__(message)
+        self.format_ = format_
+
+
 class TwilioAPIServer(object):
     app = Klein()
 
@@ -60,9 +67,22 @@ class TwilioAPIServer(object):
     def _format_response(self, request, dct, format_):
         format_ = str(format_.lstrip('.').lower())
         func = getattr(
-            TwilioAPIServer, 'format_' + format_, TwilioAPIServer.format_xml)
+            TwilioAPIServer, 'format_' + format_, None)
+        if not func:
+            raise TwilioAPIUsageException(
+                '%r is not a valid request format' % format_)
         request.setHeader('Content-Type', 'application/%s' % format_)
         return func(dct)
+
+    @app.handle_errors(TwilioAPIUsageException)
+    def usage_exception(self, request, failure):
+        request.setResponseCode(400)
+        return self._format_response(
+            request, {
+                'error_type': 'UsageError',
+                'error_message': failure.value.message
+                },
+            failure.value.format_)
 
     @app.route('/', defaults={'format_': 'xml'}, methods=['GET'])
     @app.route('/<string:format_>', methods=['GET'])
