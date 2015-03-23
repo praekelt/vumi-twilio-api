@@ -26,9 +26,33 @@ class TestTwilioAPIServer(VumiTestCase):
         self.client = TwilioRestClient(account, token, base=self.url, version='v1') 
 
     @inlineCallbacks
-    def test_create_call(self):
-        response = yield treq.get(self.url + '/v1')
-        print response
+    def test_root_default(self):
+        response = yield treq.get(self.url + '/v1/')
+        self.assertEqual(response.headers.getRawHeaders('content-type'), ['application/xml'])
+        self.assertEqual(response.code, 200)
+        content = yield response.content()
+        root = ET.fromstring(content)
+        self.assertEqual(root.tag, "TwilioResponse")
+        self.assertEqual(list(root), [])
+
+    @inlineCallbacks
+    def test_root_xml(self):
+        response = yield treq.get(self.url + '/v1/.xml')
+        self.assertEqual(response.headers.getRawHeaders('content-type'), ['application/xml'])
+        self.assertEqual(response.code, 200)
+        content = yield response.content()
+        root = ET.fromstring(content)
+        self.assertEqual(root.tag, "TwilioResponse")
+        self.assertEqual(list(root), [])
+    
+    @inlineCallbacks
+    def test_root_json(self):
+        response = yield treq.get(self.url + '/v1/.json')
+        self.assertEqual(response.headers.getRawHeaders('content-type'), ['application/xml'])
+        self.assertEqual(response.code, 200)
+        content = yield response.json()
+        self.assertEqual(content, {})
+        
 
 class TestServerFormatting(TestCase):
 

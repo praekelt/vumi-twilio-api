@@ -1,5 +1,6 @@
 import json
 from klein import Klein
+from twisted.internet.defer import inlineCallbacks
 from vumi.application import ApplicationWorker
 from vumi.config import ConfigInt, ConfigText
 import xml.etree.ElementTree as ET
@@ -26,6 +27,7 @@ class TwilioAPIWorker(ApplicationWorker):
             (self.server.app.resource(), self.config.web_path)],
             self.config.web_port)
 
+    @inlineCallbacks
     def teardown_application(self):
         """Clean-up of setup done in `setup_application`"""
         yield self.webserver.loseConnection()
@@ -54,13 +56,14 @@ class TwilioAPIServer(object):
     def format_json(dct):
         return json.dumps(dct)
 
-    def _format_response(self, dct, format_):
+    def _format_response(self, request, dct, format_):
         format_ = format_.lstrip('.').lower()
         func = getattr(TwilioAPIServer, 'format_' + format_, TwilioAPIServer.format_xml)
+        request.setHeader('Content-Type', 'application/%s' % format_)
         return func(dct)
 
     @app.route('/', defaults={'format_': 'xml'}, methods=['GET'])
     @app.route('/<string:format_>', methods=['GET'])
     def root(self, request, format_):
         ret = {}
-        return self._format_response(ret, format_)
+        return self._format_response(request, ret, format_)
