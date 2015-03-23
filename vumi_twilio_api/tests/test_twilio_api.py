@@ -1,6 +1,5 @@
 import json
 import treq
-from twilio.rest import TwilioRestClient
 from twisted.internet.defer import inlineCallbacks
 from twisted.trial.unittest import TestCase
 from vumi.application.tests.helpers import ApplicationHelper
@@ -8,6 +7,7 @@ from vumi.tests.helpers import VumiTestCase
 import xml.etree.ElementTree as ET
 
 from vumi_twilio_api.twilio_api import TwilioAPIServer, TwilioAPIWorker
+
 
 class TestTwilioAPIServer(VumiTestCase):
 
@@ -21,14 +21,17 @@ class TestTwilioAPIServer(VumiTestCase):
         })
         addr = self.worker.webserver.getHost()
         self.url = 'http://%s:%s%s' % (addr.host, addr.port, '/api')
-        account = "TestAccount"
-        token = "test_account_token"
-        self.client = TwilioRestClient(account, token, base=self.url, version='v1') 
+
+    def _server_request(self, path=''):
+        url = '%s/v1/%s' % (self.url, path)
+        return treq.get(url, persistent=False)
 
     @inlineCallbacks
     def test_root_default(self):
-        response = yield treq.get(self.url + '/v1/')
-        self.assertEqual(response.headers.getRawHeaders('content-type'), ['application/xml'])
+        response = yield self._server_request()
+        self.assertEqual(
+            response.headers.getRawHeaders('content-type'),
+            ['application/xml'])
         self.assertEqual(response.code, 200)
         content = yield response.content()
         root = ET.fromstring(content)
@@ -37,22 +40,26 @@ class TestTwilioAPIServer(VumiTestCase):
 
     @inlineCallbacks
     def test_root_xml(self):
-        response = yield treq.get(self.url + '/v1/.xml')
-        self.assertEqual(response.headers.getRawHeaders('content-type'), ['application/xml'])
+        response = yield self._server_request('.xml')
+        self.assertEqual(
+            response.headers.getRawHeaders('content-type'),
+            ['application/xml'])
         self.assertEqual(response.code, 200)
         content = yield response.content()
         root = ET.fromstring(content)
         self.assertEqual(root.tag, "TwilioResponse")
         self.assertEqual(list(root), [])
-    
+
     @inlineCallbacks
     def test_root_json(self):
-        response = yield treq.get(self.url + '/v1/.json')
-        self.assertEqual(response.headers.getRawHeaders('content-type'), ['application/xml'])
+        response = yield self._server_request('.json')
+        self.assertEqual(
+            response.headers.getRawHeaders('content-type'),
+            ['application/json'])
         self.assertEqual(response.code, 200)
         content = yield response.json()
         self.assertEqual(content, {})
-        
+
 
 class TestServerFormatting(TestCase):
 
@@ -95,4 +102,3 @@ class TestServerFormatting(TestCase):
         res = format_json(d)
         root = json.loads(res)
         self.assertEqual(root, d)
-

@@ -5,6 +5,7 @@ from vumi.application import ApplicationWorker
 from vumi.config import ConfigInt, ConfigText
 import xml.etree.ElementTree as ET
 
+
 class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
     """Config for the Twilio API worker"""
     web_path = ConfigText(
@@ -57,8 +58,9 @@ class TwilioAPIServer(object):
         return json.dumps(dct)
 
     def _format_response(self, request, dct, format_):
-        format_ = format_.lstrip('.').lower()
-        func = getattr(TwilioAPIServer, 'format_' + format_, TwilioAPIServer.format_xml)
+        format_ = str(format_.lstrip('.').lower())
+        func = getattr(
+            TwilioAPIServer, 'format_' + format_, TwilioAPIServer.format_xml)
         request.setHeader('Content-Type', 'application/%s' % format_)
         return func(dct)
 
