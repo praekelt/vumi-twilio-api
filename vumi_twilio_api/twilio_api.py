@@ -63,7 +63,19 @@ class TwilioAPIServer(object):
 
     @staticmethod
     def format_json(dct):
-        return json.dumps(dct)
+        c2s = re.compile('(?!^)([A-Z+])')
+        def camel_to_snake(string):
+            return c2s.sub(r'_\1', string).lower()
+        def convert_dict_keys(dct):
+            res = {}
+            for key, value in dct.iteritems():
+                if isinstance(value, dict):
+                    res[camel_to_snake(key)] = convert_dict_keys(value)
+                else:
+                    res[camel_to_snake(key)] = value
+            return res
+
+        return json.dumps(convert_dict_keys(dct))
 
     def _format_response(self, request, dct, format_):
         format_ = str(format_.lstrip('.').lower())

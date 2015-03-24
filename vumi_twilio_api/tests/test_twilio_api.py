@@ -107,14 +107,23 @@ class TestServerFormatting(TestCase):
     def test_format_json(self):
         format_json = TwilioAPIServer.format_json
         d = {
-            'foo': {
-                'bar': {
-                    'baz': 'qux',
+            'Foo': {
+                'Bar': {
+                    'Baz': 'Qux',
                 },
-                'foobar': 'bazqux',
+                'FooBar': 'BazQux',
             },
-            'barfoo': 'quxbaz',
+            'BarFoo': 'QuxBaz',
         }
         res = format_json(d)
         root = json.loads(res)
-        self.assertEqual(root, d)
+        expected = {
+            'foo': {
+                'bar': {
+                    'baz': 'Qux',
+                },
+                'foo_bar': 'BazQux',
+            },
+            'bar_foo': 'QuxBaz',
+        }
+        self.assertEqual(root, expected)
