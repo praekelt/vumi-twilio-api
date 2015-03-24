@@ -108,8 +108,7 @@ class TwilioAPIServer(object):
         """Validates the required fields as detailed by
         https://www.twilio.com/docs/api/rest/making-calls#post-parameters-required
         """
-        #TODO: Support 'ApplicationSid' parameter
-        required_fields = ['From', 'To', 'Url']
+        required_fields = ['From', 'To']
         fields = {}
         for field in required_fields:
             value = self._get_field(request, field)
@@ -118,6 +117,12 @@ class TwilioAPIServer(object):
                     'Required field %r not supplied' % field,
                     format_)
             fields[field] = value
+        fields['Url'] = self._get_field('Url')
+        fields['ApplicationSid'] = self._get_field('ApplicationSid')
+        if not (fields['Url'] or fields['ApplicationSid']):
+            raise TwilioAPIUsageException(
+                "Request must have an 'Url' or an 'ApplicationSid' field",
+                format_)
         return fields
 
     def _validate_make_call_optional_fields(self, request, format_):
@@ -140,7 +145,7 @@ class TwilioAPIServer(object):
                     format_)
         fields['IfMachine'] = self._get_field('IfMachine')
         valid_fields_IfMachine = [None, 'Continue', 'Hangup']
-        if not fields['IfMachine'] in valid_fields_IfMachine:
+        if fields['IfMachine'] not in valid_fields_IfMachine:
             raise TwilioAPIUsageException(
                 "IfMachine value must be one of %r" % valid_fields_IfMachine,
                 format_)
