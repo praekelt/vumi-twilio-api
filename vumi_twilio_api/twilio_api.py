@@ -98,7 +98,7 @@ class TwilioAPIServer(object):
         return json.dumps(convert_dict_keys(dct))
 
     def _format_response(self, request, dct, format_):
-        format_ = str(format_.lstrip('.').lower())
+        format_ = str(format_.lstrip('.').lower()) or 'xml'
         func = getattr(
             TwilioAPIServer, 'format_' + format_, None)
         if not func:
@@ -117,15 +117,15 @@ class TwilioAPIServer(object):
                 },
             failure.value.format_)
 
-    @app.route('/', defaults={'format_': 'xml'}, methods=['GET'])
+    @app.route('/', defaults={'format_': ''}, methods=['GET'])
     @app.route('/<string:format_>', methods=['GET'])
     def root(self, request, format_):
         ret = {
             'Version': {
                 'Name': self.version,
-                'Uri': '/%s' % self.version,
+                'Uri': '/%s%s' % (self.version, format_),
                 'SubresourceUris': {
-                    'Accounts': '/%s/Accounts' % self.version,
+                    'Accounts': '/%s/Accounts%s' % (self.version, format_),
                 },
             },
         }
@@ -133,7 +133,7 @@ class TwilioAPIServer(object):
 
     @app.route(
         '/Accounts/<string:account_sid>/Calls',
-        defaults={'format_': 'xml'},
+        defaults={'format_': ''},
         methods=['POST'])
     @app.route(
         '/Accounts/<string:account_sid>/Calls<string:format_>',
@@ -183,10 +183,10 @@ class TwilioAPIServer(object):
                 'ApiVersion': self.version,
                 'ForwardedFrom': None,
                 'CallerName': None,
-                'Uri': fields['Uri'],
+                'Uri': '%s%s' % (fields['Uri'], format_),
                 'SubresourceUris': {
-                    'Notifications': '%s/Notifications' % fields['Uri'],
-                    'Recordings': '%s/Recordings' % fields['Uri'],
+                    'Notifications': '%s/Notifications%s' % (fields['Uri'], format_),
+                    'Recordings': '%s/Recordings%s' % (fields['Uri'], format_),
                 }
             }
         }, format_))
