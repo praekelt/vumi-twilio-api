@@ -92,11 +92,11 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(name.tag, 'Name')
         self.assertEqual(name.text, 'v1')
         self.assertEqual(uri.tag, 'Uri')
-        self.assertEqual(uri.text, '/v1')
+        self.assertEqual(uri.text, '/v1.xml')
         self.assertEqual(subresourceuris.tag, 'SubresourceUris')
         [accounts] = sorted(list(subresourceuris), key=lambda i: i.tag)
         self.assertEqual(accounts.tag, 'Accounts')
-        self.assertEqual(accounts.text, '/v1/Accounts')
+        self.assertEqual(accounts.text, '/v1/Accounts.xml')
 
     @inlineCallbacks
     def test_root_json(self):
@@ -108,9 +108,9 @@ class TestTwilioAPIServer(VumiTestCase):
         content = yield response.json()
         self.assertEqual(content, {
             'name': 'v1',
-            'uri': '/v1',
+            'uri': '/v1.json',
             'subresource_uris': {
-                'accounts': '/v1/Accounts'
+                'accounts': '/v1/Accounts.json'
             }
         })
 
