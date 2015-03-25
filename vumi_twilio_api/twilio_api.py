@@ -1,9 +1,15 @@
+from datetime import datetime
+from dateutil.tz import tzlocal
 import json
 from klein import Klein
+import os
 import re
-from twisted.internet.defer import inlineCallbacks
+from twisted.internet.defer import inlineCallbacks, returnValue
+import uuid
 from vumi.application import ApplicationWorker
-from vumi.config import ConfigInt, ConfigText
+from vumi.components.session import SessionManager
+from vumi.config import ConfigDict, ConfigInt, ConfigText
+from vumi.message import TransportUserMessage
 import xml.etree.ElementTree as ET
 
 
@@ -15,24 +21,33 @@ class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
     web_port = ConfigInt(
         "The port the worker should open for the API",
         required=True, static=True)
+    api_version = ConfigText(
+        "The version of the API, used in the api URL",
+        default="2010-04-01", static=True)
+    redis_manager = ConfigDict("Redis config.", static=True)
 
 
 class TwilioAPIWorker(ApplicationWorker):
     """Emulates the Twilio API to use vumi as if it was Twilio"""
     CONFIG_CLASS = TwilioAPIConfig
 
+    @inlineCallbacks
     def setup_application(self):
         """Application specific setup"""
         self.config = self.get_static_config()
-        self.server = TwilioAPIServer(self)
+        self.server = TwilioAPIServer(self, self.config.api_version)
+        path = os.path.join(self.config.web_path, self.config.api_version)
         self.webserver = self.start_web_resources([
-            (self.server.app.resource(), self.config.web_path)],
+            (self.server.app.resource(), path)],
             self.config.web_port)
+        self.session_manager = yield SessionManager.from_redis_config(
+            self.config.redis_manager)
 
     @inlineCallbacks
     def teardown_application(self):
         """Clean-up of setup done in `setup_application`"""
         yield self.webserver.loseConnection()
+        yield self.session_manager.stop()
 
 
 class TwilioAPIUsageException(Exception):
@@ -45,8 +60,9 @@ class TwilioAPIUsageException(Exception):
 class TwilioAPIServer(object):
     app = Klein()
 
-    def __init__(self, vumi_worker):
+    def __init__(self, vumi_worker, version):
         self.vumi_worker = vumi_worker
+        self.version = version
 
     @staticmethod
     def format_xml(dct, root=None):
