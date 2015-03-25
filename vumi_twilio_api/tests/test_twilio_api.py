@@ -64,7 +64,17 @@ class TestTwilioAPIServer(VumiTestCase):
         content = yield response.content()
         root = ET.fromstring(content)
         self.assertEqual(root.tag, "TwilioResponse")
-        self.assertEqual(list(root), [])
+        [version] = list(root)
+        self.assertEqual(version.tag, 'Version')
+        [name, subresourceuris, uri] = sorted(list(version), key=lambda i: i.tag)
+        self.assertEqual(name.tag, 'Name')
+        self.assertEqual(name.text, 'v1')
+        self.assertEqual(uri.tag, 'Uri')
+        self.assertEqual(uri.text, '/v1')
+        self.assertEqual(subresourceuris.tag, 'SubresourceUris')
+        [accounts] = sorted(list(subresourceuris), key=lambda i: i.tag)
+        self.assertEqual(accounts.tag, 'Accounts')
+        self.assertEqual(accounts.text, '/v1/Accounts')
 
     @inlineCallbacks
     def test_root_xml(self):
@@ -76,7 +86,17 @@ class TestTwilioAPIServer(VumiTestCase):
         content = yield response.content()
         root = ET.fromstring(content)
         self.assertEqual(root.tag, "TwilioResponse")
-        self.assertEqual(list(root), [])
+        [version] = list(root)
+        self.assertEqual(version.tag, 'Version')
+        [name, subresourceuris, uri] = sorted(list(version), key=lambda i: i.tag)
+        self.assertEqual(name.tag, 'Name')
+        self.assertEqual(name.text, 'v1')
+        self.assertEqual(uri.tag, 'Uri')
+        self.assertEqual(uri.text, '/v1')
+        self.assertEqual(subresourceuris.tag, 'SubresourceUris')
+        [accounts] = sorted(list(subresourceuris), key=lambda i: i.tag)
+        self.assertEqual(accounts.tag, 'Accounts')
+        self.assertEqual(accounts.text, '/v1/Accounts')
 
     @inlineCallbacks
     def test_root_json(self):
@@ -86,7 +106,13 @@ class TestTwilioAPIServer(VumiTestCase):
             ['application/json'])
         self.assertEqual(response.code, 200)
         content = yield response.json()
-        self.assertEqual(content, {})
+        self.assertEqual(content, {
+            'name': 'v1',
+            'uri': '/v1',
+            'subresource_uris': {
+                'accounts': '/v1/Accounts'
+            }
+        })
 
     @inlineCallbacks
     def test_root_invalid_format(self):
