@@ -1,5 +1,7 @@
+from datetime import datetime
 import json
 from klein import Klein
+from mock import Mock
 import treq
 from twilio import twiml
 from twilio.rest import TwilioRestClient
@@ -10,6 +12,7 @@ from vumi.application.tests.helpers import ApplicationHelper
 from vumi.tests.helpers import VumiTestCase
 import xml.etree.ElementTree as ET
 
+import vumi_twilio_api
 from vumi_twilio_api.twilio_api import TwilioAPIServer, TwilioAPIWorker
 
 class TwiMLServer(object):
@@ -129,6 +132,54 @@ class TestTwilioAPIServer(VumiTestCase):
             error_message.text, "'foo' is not a valid request format")
         self.assertEqual(error_type.tag, 'error_type')
         self.assertEqual(error_type.text, 'UsageError')
+
+    @inlineCallbacks
+    def test_make_call_sid(self):
+        res = self.worker.server._get_sid()
+        self.assertTrue(isinstance(res, basestring))
+        self.assertTrue('-' not in res)
+
+        self.worker.server._get_sid = Mock(return_value='ab12cd34')
+        call = yield self._twilio_client_create_call('default.xml', from_='+12345', to='+54321')
+        self.assertEqual(call.sid, 'ab12cd34')
+        self.assertEqual(call.subresource_uris['notifications'], '/v1/Accounts/test_account/Calls/ab12cd34/Notifications.json')
+        self.assertEqual(call.subresource_uris['recordings'], '/v1/Accounts/test_account/Calls/ab12cd34/Recordings.json')
+        self.assertEqual(call.name, 'ab12cd34')
+
+    @inlineCallbacks
+    def test_make_call_timestamp(self):
+        res = self.worker.server._get_timestamp()
+        self.assertTrue(isinstance(res, basestring))
+        self.assertRegexpMatches(res, '\w+, \d{2} \w+ \d{4} \d{2}:\d{2}:\d{2} (\+|-)\d{4}')
+
+        self.worker.server._get_timestamp = Mock(return_value='Thu, 01 January 1970 00:00:00 +0000')
+        call = yield self._twilio_client_create_call('default.xml', from_='+12345', to='+54321')
+        self.assertEqual(call.date_created, datetime.utcfromtimestamp(0))
+        self.assertEqual(call.date_updated, datetime.utcfromtimestamp(0))
+
+    @inlineCallbacks
+    def test_make_call_response_defaults(self):
+        r = twiml.Response()
+        self.twiml_server.add_response('default.xml', r)
+        call = yield self._twilio_client_create_call('default.xml', from_='+12345', to='+54321')
+        
+        self.assertEqual(call.to, '+54321')
+        self.assertEqual(call.formatted_to, '+54321')
+        self.assertEqual(call.from_, '+12345')
+        self.assertEqual(call.formatted_from, '+12345')
+        self.assertEqual(call.parent_call_sid, None)
+        self.assertEqual(call.phone_number_sid, None)
+        self.assertEqual(call.status, 'queued')
+        self.assertEqual(call.start_time, None)
+        self.assertEqual(call.end_time, None)
+        self.assertEqual(call.duration, None)
+        self.assertEqual(call.price, None)
+        self.assertEqual(call.direction, 'outbound-api')
+        self.assertEqual(call.answered_by, None)
+        self.assertEqual(call.api_version, 'v1')
+        self.assertEqual(call.forwarded_from, None)
+        self.assertEqual(call.caller_name, None)
+        self.assertEqual(call.account_sid, 'test_account')
 
 
 class TestServerFormatting(TestCase):
