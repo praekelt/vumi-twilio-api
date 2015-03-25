@@ -1,12 +1,29 @@
 import json
+from klein import Klein
 import treq
+from twilio import twiml
+from twilio.rest import TwilioRestClient
 from twisted.internet.defer import inlineCallbacks
+from twisted.internet.threads import deferToThread
 from twisted.trial.unittest import TestCase
 from vumi.application.tests.helpers import ApplicationHelper
 from vumi.tests.helpers import VumiTestCase
 import xml.etree.ElementTree as ET
 
 from vumi_twilio_api.twilio_api import TwilioAPIServer, TwilioAPIWorker
+
+class TwiMLServer(object):
+    app = Klein()
+
+    def __init__(self, responses={}):
+        self._responses = responses.copy()
+
+    def add_response(self, filename, response):
+        self._responses[filename] = response
+
+    @app.route('/<string:filename>')
+    def get_twiml(self, request, filename):
+        return self._responses[filename].toxml()
 
 
 class TestTwilioAPIServer(VumiTestCase):
@@ -16,15 +33,26 @@ class TestTwilioAPIServer(VumiTestCase):
         self.app_helper = self.add_helper(ApplicationHelper(
             TwilioAPIWorker, transport_type='voice'))
         self.worker = yield self.app_helper.get_application({
-            'web_path': '/api/v1',
-            'web_port': 8080
+            'web_path': '/api',
+            'web_port': 8080,
+            'api_version': 'v1',
         })
         addr = self.worker.webserver.getHost()
         self.url = 'http://%s:%s%s' % (addr.host, addr.port, '/api')
+        self.client = TwilioRestClient('test_account', 'test_token', base=self.url, version='v1')
+        self.twiml_server = TwiMLServer()
+        self.twiml_connection = self.worker.start_web_resources([
+            (self.twiml_server.app.resource(), '/twiml')], 8081)
+        self.add_cleanup(self.twiml_connection.loseConnection)
 
     def _server_request(self, path=''):
         url = '%s/v1/%s' % (self.url, path)
         return treq.get(url, persistent=False)
+
+    def _twilio_client_create_call(self, filename, *args, **kwargs):
+        addr = self.twiml_connection.getHost()
+        url = 'http://%s:%s%s%s' % (addr.host, addr.port, '/twiml/', filename)
+        return deferToThread(self.client.calls.create, *args, url=url, **kwargs)
 
     @inlineCallbacks
     def test_root_default(self):
