@@ -195,7 +195,7 @@ class TwilioAPIServer(object):
         return str(uuid.uuid4()).replace('-', '')
 
     def _get_timestamp(self):
-        return datetime.now(tzlocal()).strftime('%a, %d %v %y %H:%M:%S %z')
+        return datetime.now(tzlocal()).strftime('%a, %d %b %Y %H:%M:%S %z')
 
     def _get_field(self, request, field, default=None):
         return request.args.get(field, [default])[0]
