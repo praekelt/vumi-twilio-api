@@ -79,6 +79,8 @@ class TwilioAPIServer(object):
 
     @staticmethod
     def format_json(dct):
+        if dct.get('Call'):
+            dct = dct['Call']
         c2s = re.compile('(?!^)([A-Z+])')
         def camel_to_snake(string):
             return c2s.sub(r'_\1', string).lower()
@@ -126,8 +128,64 @@ class TwilioAPIServer(object):
     @app.route(
         '/Accounts/<string:account_sid>/Calls<string:format_>',
         methods=['POST'])
+    @inlineCallbacks
     def make_call(self, request, account_sid, format_):
-        fields = _validate_make_call_fields(request, format_)
+        """Making calls endpoint
+        https://www.twilio.com/docs/api/rest/making-calls"""
+        #TODO: Support ApplicationSid field
+        #TODO: Support SendDigits field
+        #TODO: Support IfMachine field
+        #TODO: Support Timeout field
+        #TODO: Support Record field
+        fields = self._validate_make_call_fields(request, format_)
+        fields['AccountSid'] = account_sid
+        fields['CallId'] = self._get_sid()
+        fields['DateCreated'] = self._get_timestamp()
+        fields['Uri'] = '/%s/Accounts/%s/Calls/%s' % (self.version, account_sid, fields['CallId'])
+        message = yield self.vumi_worker.send_to(
+            fields['To'], '',
+            from_addr=fields['From'],
+            session_event=TransportUserMessage.SESSION_NEW,
+            to_addr_type=TransportUserMessage.AT_MSISDN,
+            from_addr_type=TransportUserMessage.AT_MSISDN
+        )
+        yield self.vumi_worker.session_manager.create_session(
+            message['message_id'], **fields)
+        returnValue(self._format_response(request, {
+            'Call': {
+                'Sid': fields['CallId'],
+                'DateCreated': fields['DateCreated'],
+                'DateUpdated': fields['DateCreated'],
+                'ParentCallSid': None,
+                'AccountSid': account_sid,
+                'To': fields['To'],
+                'FormattedTo': fields['To'],
+                'From': fields['From'],
+                'FormattedFrom': fields['From'],
+                'PhoneNumberSid': None,
+                'Status': 'queued',
+                'StartTime': None,
+                'EndTime': None,
+                'Duration': None,
+                'Price': None,
+                'Direction': 'outbound-api',
+                'AnsweredBy': None,
+                'ApiVersion': self.version,
+                'ForwardedFrom': None,
+                'CallerName': None,
+                'Uri': fields['Uri'],
+                'SubresourceUris': {
+                    'Notifications': '%s/Notifications' % fields['Uri'],
+                    'Recordings': '%s/Recordings' % fields['Uri'],
+                }
+            }
+        }, format_))
+
+    def _get_sid(self):
+        return str(uuid.uuid4()).replace('-', '')
+
+    def _get_timestamp(self):
+        return datetime.now(tzlocal()).strftime('%a, %d %v %y %H:%M:%S %z')
 
     def _get_field(self, request, field, default=None):
         return request.args.get(field, [default])[0]
