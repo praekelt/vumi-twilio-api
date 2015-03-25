@@ -81,6 +81,8 @@ class TwilioAPIServer(object):
     def format_json(dct):
         if dct.get('Call'):
             dct = dct['Call']
+        if dct.get('Version'):
+            dct = dct['Version']
         c2s = re.compile('(?!^)([A-Z+])')
         def camel_to_snake(string):
             return c2s.sub(r'_\1', string).lower()
@@ -118,7 +120,15 @@ class TwilioAPIServer(object):
     @app.route('/', defaults={'format_': 'xml'}, methods=['GET'])
     @app.route('/<string:format_>', methods=['GET'])
     def root(self, request, format_):
-        ret = {}
+        ret = {
+            'Version': {
+                'Name': self.version,
+                'Uri': '/%s' % self.version,
+                'SubresourceUris': {
+                    'Accounts': '/%s/Accounts' % self.version,
+                },
+            },
+        }
         return self._format_response(request, ret, format_)
 
     @app.route(
