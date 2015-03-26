@@ -84,8 +84,10 @@ class TwilioAPIServer(object):
         if dct.get('Version'):
             dct = dct['Version']
         c2s = re.compile('(?!^)([A-Z+])')
+
         def camel_to_snake(string):
             return c2s.sub(r'_\1', string).lower()
+
         def convert_dict_keys(dct):
             res = {}
             for key, value in dct.iteritems():
@@ -142,16 +144,17 @@ class TwilioAPIServer(object):
     def make_call(self, request, account_sid, format_):
         """Making calls endpoint
         https://www.twilio.com/docs/api/rest/making-calls"""
-        #TODO: Support ApplicationSid field
-        #TODO: Support SendDigits field
-        #TODO: Support IfMachine field
-        #TODO: Support Timeout field
-        #TODO: Support Record field
+        # TODO: Support ApplicationSid field
+        # TODO: Support SendDigits field
+        # TODO: Support IfMachine field
+        # TODO: Support Timeout field
+        # TODO: Support Record field
         fields = self._validate_make_call_fields(request, format_)
         fields['AccountSid'] = account_sid
         fields['CallId'] = self._get_sid()
         fields['DateCreated'] = self._get_timestamp()
-        fields['Uri'] = '/%s/Accounts/%s/Calls/%s' % (self.version, account_sid, fields['CallId'])
+        fields['Uri'] = '/%s/Accounts/%s/Calls/%s' % (
+            self.version, account_sid, fields['CallId'])
         message = yield self.vumi_worker.send_to(
             fields['To'], '',
             from_addr=fields['From'],
@@ -185,7 +188,8 @@ class TwilioAPIServer(object):
                 'CallerName': None,
                 'Uri': '%s%s' % (fields['Uri'], format_),
                 'SubresourceUris': {
-                    'Notifications': '%s/Notifications%s' % (fields['Uri'], format_),
+                    'Notifications': '%s/Notifications%s' % (
+                        fields['Uri'], format_),
                     'Recordings': '%s/Recordings%s' % (fields['Uri'], format_),
                 }
             }
@@ -233,12 +237,13 @@ class TwilioAPIServer(object):
         for field in [
                 'FallbackUrl', 'StatusCallback', 'SendDigits', 'IfMachine']:
             fields[field] = self._get_field(request, field)
-                
+
         if fields['SendDigits']:
             if not all(re.match('[0-9#*w]', c) for c in fields['SendDigits']):
                 raise TwilioAPIUsageException(
                     "SendDigits value %r is not valid. May only contain the "
-                    "characters (0-9), '#', '*' and 'w'" % fields['SendDigits'],
+                    "characters (0-9), '#', '*' and 'w'" % (
+                        fields['SendDigits']),
                     format_)
 
         valid_fields_IfMachine = [None, 'Continue', 'Hangup']
@@ -252,7 +257,7 @@ class TwilioAPIServer(object):
     def _validate_make_call_fields(self, request, format_):
         """Validates the fields sent to the request according to
         https://www.twilio.com/docs/api/rest/making-calls"""
-        fields =  self._validate_make_call_required_fields(request, format_)
-        fields.update(self._validate_make_call_optional_fields(request, format_))
+        fields = self._validate_make_call_required_fields(request, format_)
+        fields.update(
+            self._validate_make_call_optional_fields(request, format_))
         return fields
-

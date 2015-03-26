@@ -3,7 +3,6 @@ import json
 from klein import Klein
 from mock import Mock
 import treq
-from twilio import twiml
 from twilio.rest import TwilioRestClient
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.threads import deferToThread
@@ -12,8 +11,8 @@ from vumi.application.tests.helpers import ApplicationHelper
 from vumi.tests.helpers import VumiTestCase
 import xml.etree.ElementTree as ET
 
-import vumi_twilio_api
 from vumi_twilio_api.twilio_api import TwilioAPIServer, TwilioAPIWorker
+
 
 class TwiMLServer(object):
     app = Klein()
@@ -42,7 +41,8 @@ class TestTwilioAPIServer(VumiTestCase):
         })
         addr = self.worker.webserver.getHost()
         self.url = 'http://%s:%s%s' % (addr.host, addr.port, '/api')
-        self.client = TwilioRestClient('test_account', 'test_token', base=self.url, version='v1')
+        self.client = TwilioRestClient(
+            'test_account', 'test_token', base=self.url, version='v1')
         self.twiml_server = TwiMLServer()
         self.twiml_connection = self.worker.start_web_resources([
             (self.twiml_server.app.resource(), '/twiml')], 8081)
@@ -55,7 +55,8 @@ class TestTwilioAPIServer(VumiTestCase):
     def _twilio_client_create_call(self, filename, *args, **kwargs):
         addr = self.twiml_connection.getHost()
         url = 'http://%s:%s%s%s' % (addr.host, addr.port, '/twiml/', filename)
-        return deferToThread(self.client.calls.create, *args, url=url, **kwargs)
+        return deferToThread(
+            self.client.calls.create, *args, url=url, **kwargs)
 
     @inlineCallbacks
     def test_root_default(self):
@@ -69,7 +70,8 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(root.tag, "TwilioResponse")
         [version] = list(root)
         self.assertEqual(version.tag, 'Version')
-        [name, subresourceuris, uri] = sorted(list(version), key=lambda i: i.tag)
+        [name, subresourceuris, uri] = sorted(
+            list(version), key=lambda i: i.tag)
         self.assertEqual(name.tag, 'Name')
         self.assertEqual(name.text, 'v1')
         self.assertEqual(uri.tag, 'Uri')
@@ -91,7 +93,8 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(root.tag, "TwilioResponse")
         [version] = list(root)
         self.assertEqual(version.tag, 'Version')
-        [name, subresourceuris, uri] = sorted(list(version), key=lambda i: i.tag)
+        [name, subresourceuris, uri] = sorted(
+            list(version), key=lambda i: i.tag)
         self.assertEqual(name.tag, 'Name')
         self.assertEqual(name.text, 'v1')
         self.assertEqual(uri.tag, 'Uri')
@@ -140,27 +143,36 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertTrue('-' not in res)
 
         self.worker.server._get_sid = Mock(return_value='ab12cd34')
-        call = yield self._twilio_client_create_call('default.xml', from_='+12345', to='+54321')
+        call = yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
         self.assertEqual(call.sid, 'ab12cd34')
-        self.assertEqual(call.subresource_uris['notifications'], '/v1/Accounts/test_account/Calls/ab12cd34/Notifications.json')
-        self.assertEqual(call.subresource_uris['recordings'], '/v1/Accounts/test_account/Calls/ab12cd34/Recordings.json')
+        self.assertEqual(
+            call.subresource_uris['notifications'],
+            '/v1/Accounts/test_account/Calls/ab12cd34/Notifications.json')
+        self.assertEqual(
+            call.subresource_uris['recordings'],
+            '/v1/Accounts/test_account/Calls/ab12cd34/Recordings.json')
         self.assertEqual(call.name, 'ab12cd34')
 
     @inlineCallbacks
     def test_make_call_timestamp(self):
         res = self.worker.server._get_timestamp()
         self.assertTrue(isinstance(res, basestring))
-        self.assertRegexpMatches(res, '\w+, \d{2} \w+ \d{4} \d{2}:\d{2}:\d{2} (\+|-)\d{4}')
+        self.assertRegexpMatches(
+            res, '\w+, \d{2} \w+ \d{4} \d{2}:\d{2}:\d{2} (\+|-)\d{4}')
 
-        self.worker.server._get_timestamp = Mock(return_value='Thu, 01 January 1970 00:00:00 +0000')
-        call = yield self._twilio_client_create_call('default.xml', from_='+12345', to='+54321')
+        self.worker.server._get_timestamp = Mock(
+            return_value='Thu, 01 January 1970 00:00:00 +0000')
+        call = yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
         self.assertEqual(call.date_created, datetime.utcfromtimestamp(0))
         self.assertEqual(call.date_updated, datetime.utcfromtimestamp(0))
 
     @inlineCallbacks
     def test_make_call_response_defaults(self):
-        call = yield self._twilio_client_create_call('default.xml', from_='+12345', to='+54321')
-        
+        call = yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+
         self.assertEqual(call.to, '+54321')
         self.assertEqual(call.formatted_to, '+54321')
         self.assertEqual(call.from_, '+12345')
@@ -182,50 +194,65 @@ class TestTwilioAPIServer(VumiTestCase):
     @inlineCallbacks
     def test_make_call_required_parameters_to(self):
         addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (addr.host, addr.port, '/twiml/', 'example.xml')
-        
+        url = 'http://%s:%s%s%s' % (
+            addr.host, addr.port, '/twiml/', 'example.xml')
+
         # Can't use the client here because it requires the required parameters
         response = yield self._server_request(
-                '/Accounts/test-account/Calls.json', method='POST', data={'From': '+12345', 'Url': url})
+            '/Accounts/test-account/Calls.json', method='POST',
+            data={'From': '+12345', 'Url': url})
         self.assertEqual(response.code, 400)
         response = yield response.json()
         self.assertEqual(response['error_type'], 'UsageError')
-        self.assertEqual(response['error_message'], "Required field 'To' not supplied")
+        self.assertEqual(
+            response['error_message'], "Required field 'To' not supplied")
 
     @inlineCallbacks
     def test_make_call_required_parameters_from(self):
         addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (addr.host, addr.port, '/twiml/', 'example.xml')
-        
+        url = 'http://%s:%s%s%s' % (
+            addr.host, addr.port, '/twiml/', 'example.xml')
+
         # Can't use the client here because it requires the required parameters
         response = yield self._server_request(
-                '/Accounts/test-account/Calls.json', method='POST', data={'To': '+12345', 'Url': url})
+            '/Accounts/test-account/Calls.json', method='POST',
+            data={'To': '+12345', 'Url': url})
         self.assertEqual(response.code, 400)
         response = yield response.json()
         self.assertEqual(response['error_type'], 'UsageError')
-        self.assertEqual(response['error_message'], "Required field 'From' not supplied")
+        self.assertEqual(
+            response['error_message'], "Required field 'From' not supplied")
 
     @inlineCallbacks
     def test_make_call_required_parameters_url(self):
         addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (addr.host, addr.port, '/twiml/', 'example.xml')
-        
+        url = 'http://%s:%s%s%s' % (
+            addr.host, addr.port, '/twiml/', 'example.xml')
+
         # Can't use the client here because it requires the required parameters
         response = yield self._server_request(
-                '/Accounts/test-account/Calls.json', method='POST', data={'To': '+12345', 'From': '+54321'})
+            '/Accounts/test-account/Calls.json', method='POST',
+            data={'To': '+12345', 'From': '+54321'})
         self.assertEqual(response.code, 400)
         response = yield response.json()
         self.assertEqual(response['error_type'], 'UsageError')
-        self.assertEqual(response['error_message'], "Request must have an 'Url' or an 'ApplicationSid' field")
+        self.assertEqual(
+            response['error_message'],
+            "Request must have an 'Url' or an 'ApplicationSid' field")
 
         response = yield self._server_request(
-                '/Accounts/test-account/Calls.json', method='POST', data={'To': '+12345', 'From': '+54321', 'Url': url})
+            '/Accounts/test-account/Calls.json', method='POST',
+            data={'To': '+12345', 'From': '+54321', 'Url': url})
         self.assertEqual(response.code, 200)
         response = yield response.json()
         self.assertEqual(response['to'], '+12345')
 
         response = yield self._server_request(
-                '/Accounts/test-account/Calls.json', method='POST', data={'To': '+12345', 'From': '+54321', 'ApplicationSid': 'foobar'})
+            '/Accounts/test-account/Calls.json', method='POST',
+            data={
+                'To': '+12345',
+                'From': '+54321',
+                'ApplicationSid': 'foobar'})
         self.assertEqual(response.code, 200)
         response = yield response.json()
         self.assertEqual(response['to'], '+12345')
