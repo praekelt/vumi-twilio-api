@@ -2,6 +2,7 @@ from datetime import datetime
 import json
 from klein import Klein
 from mock import Mock
+import re
 import treq
 from twilio.rest import TwilioRestClient
 from twilio.rest.exceptions import TwilioRestException
@@ -96,6 +97,9 @@ class TestTwilioAPIServer(VumiTestCase):
         url = 'http://%s:%s%s%s' % (addr.host, addr.port, '/twiml/', filename)
         return deferToThread(
             self.client.calls.create, *args, url=url, **kwargs)
+
+    def assertRegexpMatches(self, text, regexp, msg=None):
+        self.assertTrue(re.search(regexp, text), msg=msg)
 
     @inlineCallbacks
     def test_root_default(self):
