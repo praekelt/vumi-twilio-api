@@ -4,6 +4,7 @@ from klein import Klein
 from mock import Mock
 import treq
 from twilio.rest import TwilioRestClient
+from twilio.rest.exceptions import TwilioRestException
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.threads import deferToThread
 from twisted.trial.unittest import TestCase
@@ -256,6 +257,50 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(response.code, 200)
         response = yield response.json()
         self.assertEqual(response['to'], '+12345')
+
+    @inlineCallbacks
+    def test_make_call_optional_parameters_senddigits(self):
+        call = yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321',
+            send_digits='0123456789#*w')
+        self.assertEqual(call.to, '+54321')
+
+        e = yield self.assertFailure(
+            self._twilio_client_create_call(
+                'default.xml', from_='+12345', to='+54321',
+                send_digits='0a*'),
+            TwilioRestException)
+        self.assertEqual(e.status, 400)
+        message = json.loads(e.msg)
+        self.assertEqual(message['error_type'], 'UsageError')
+        self.assertEqual(
+            message['error_message'],
+            "SendDigits value '0a*' is not valid. May only contain the "
+            "characters (0-9), '#', '*' and 'w'")
+
+    @inlineCallbacks
+    def test_make_call_optional_parameters_ifmachine(self):
+        call = yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321',
+            if_machine='Continue')
+        self.assertEqual(call.to, '+54321')
+
+        call = yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321',
+            if_machine='Hangup')
+        self.assertEqual(call.to, '+54321')
+
+        e = yield self.assertFailure(
+            self._twilio_client_create_call(
+                'default.xml', from_='+12345', to='+54321',
+                if_machine='foobar'),
+            TwilioRestException)
+        self.assertEqual(e.status, 400)
+        message = json.loads(e.msg)
+        self.assertEqual(message['error_type'], 'UsageError')
+        self.assertEqual(
+            message['error_message'],
+            "IfMachine value must be one of [None, 'Continue', 'Hangup']")
 
 
 class TestServerFormatting(TestCase):
