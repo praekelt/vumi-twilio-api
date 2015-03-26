@@ -26,7 +26,45 @@ class TwiMLServer(object):
 
     @app.route('/<string:filename>')
     def get_twiml(self, request, filename):
-        return self._responses[filename].toxml()
+        request.setHeader('Content-Type', 'application/xml')
+        return ET.tostring(self._responses[filename])
+
+
+class TestTwiMLServer(VumiTestCase):
+
+    @inlineCallbacks
+    def setUp(self):
+        self.app_helper = self.add_helper(ApplicationHelper(
+            TwilioAPIWorker, transport_type='voice'))
+        self.worker = yield self.app_helper.get_application({
+            'web_path': '/api',
+            'web_port': 8080,
+            'api_version': 'v1',
+        })
+
+        self.twiml_server = TwiMLServer()
+        self.twiml_connection = self.worker.start_web_resources([
+            (self.twiml_server.app.resource(), '/twiml')], 8081)
+        self.add_cleanup(self.twiml_connection.loseConnection)
+        addr = self.twiml_connection.getHost()
+        self.url = 'http://%s:%s' % (addr.host, addr.port)
+
+    def _server_request(self, path='', method='GET', data={}):
+        url = '%s/twiml/%s' % (self.url, path)
+        return treq.request(method, url, persistent=False, data=data)
+
+    @inlineCallbacks
+    def test_getting_response(self):
+        response = ET.Element('Foo')
+        bar = ET.SubElement(response, 'Bar')
+        self.twiml_server.add_response('example.xml', response)
+
+        request = yield self._server_request('example.xml')
+        request = yield request.content()
+        root = ET.fromstring(request)
+        self.assertEqual(root.tag, response.tag)
+        [child] = list(root)
+        self.assertEqual(child.tag, bar.tag)
 
 
 class TestTwilioAPIServer(VumiTestCase):
