@@ -22,12 +22,24 @@ class TwiMLServer(object):
 
     def __init__(self, responses={}):
         self._responses = responses.copy()
+        self.requests = []
 
     def add_response(self, filename, response):
         self._responses[filename] = response
 
+    def add_err(self, filename, err):
+        self._responses[filename] = Exception(err)
+
     @app.route('/<string:filename>')
     def get_twiml(self, request, filename):
+        self.requests.append({
+            'filename': filename,
+            'request': request,
+        })
+        response = self._responses[filename]
+        if isinstance(response, Exception):
+            request.setResponseCode(500)
+            return response.message
         request.setHeader('Content-Type', 'application/xml')
         return str(self._responses[filename])
 
