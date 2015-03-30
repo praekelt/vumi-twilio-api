@@ -4,13 +4,19 @@ import json
 from klein import Klein
 import os
 import re
+import treq
 from twisted.internet.defer import inlineCallbacks, returnValue
 import uuid
 from vumi.application import ApplicationWorker
+from vumi.components.message_store import MessageStore
 from vumi.components.session import SessionManager
-from vumi.config import ConfigDict, ConfigInt, ConfigText
+from vumi.config import ConfigDict, ConfigInt, ConfigRiak, ConfigText
 from vumi.message import TransportUserMessage
+from vumi.persist.txredis_manager import TxRedisManager
+from vumi.persist.txriak_manager import TxRiakManager
 import xml.etree.ElementTree as ET
+
+from vumi_twilio_api.twiml_parser import TwiMLParser
 
 
 class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
@@ -24,7 +30,8 @@ class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
     api_version = ConfigText(
         "The version of the API, used in the api URL",
         default="2010-04-01", static=True)
-    redis_manager = ConfigDict("Redis config.", static=True)
+    redis_manager = ConfigDict("Redis config.", required=True, static=True)
+    riak_manager = ConfigRiak("Riak config.", required=True, static=True)
 
 
 class TwilioAPIWorker(ApplicationWorker):
@@ -40,8 +47,11 @@ class TwilioAPIWorker(ApplicationWorker):
         self.webserver = self.start_web_resources([
             (self.server.app.resource(), path)],
             self.config.web_port)
-        self.session_manager = yield SessionManager.from_redis_config(
-            self.config.redis_manager)
+        redis = yield TxRedisManager.from_config(self.config.redis_manager)
+        riak = yield TxRiakManager.from_config(self.config.riak_manager)
+        self.session_manager = SessionManager(redis)
+        self.message_store = MessageStore(riak, redis)
+        self.twiml_parser = TwiMLParser()
 
     @inlineCallbacks
     def teardown_application(self):
@@ -162,8 +172,9 @@ class TwilioAPIServer(object):
             to_addr_type=TransportUserMessage.AT_MSISDN,
             from_addr_type=TransportUserMessage.AT_MSISDN
         )
+        yield self.vumi_worker.message_store.add_outbound_message(message)
         yield self.vumi_worker.session_manager.create_session(
-            message['message_id'], **fields)
+            message['to_addr'], **fields)
         returnValue(self._format_response(request, {
             'Call': {
                 'Sid': fields['CallId'],

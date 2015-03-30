@@ -75,7 +75,7 @@ class TestTwilioAPIServer(VumiTestCase):
     @inlineCallbacks
     def setUp(self):
         self.app_helper = self.add_helper(ApplicationHelper(
-            TwilioAPIWorker, transport_type='voice'))
+            TwilioAPIWorker, use_riak=True, transport_type='voice'))
         self.worker = yield self.app_helper.get_application({
             'web_path': '/api',
             'web_port': 8080,
