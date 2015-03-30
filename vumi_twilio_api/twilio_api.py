@@ -165,6 +165,8 @@ class TwilioAPIServer(object):
         fields['DateCreated'] = self._get_timestamp()
         fields['Uri'] = '/%s/Accounts/%s/Calls/%s' % (
             self.version, account_sid, fields['CallId'])
+        fields['Status'] = 'queued'
+        fields['Direction'] = 'outbound-api'
         message = yield self.vumi_worker.send_to(
             fields['To'], '',
             from_addr=fields['From'],
@@ -187,12 +189,12 @@ class TwilioAPIServer(object):
                 'From': fields['From'],
                 'FormattedFrom': fields['From'],
                 'PhoneNumberSid': None,
-                'Status': 'queued',
+                'Status': fields['Status'],
                 'StartTime': None,
                 'EndTime': None,
                 'Duration': None,
                 'Price': None,
-                'Direction': 'outbound-api',
+                'Direction': fields['Direction'],
                 'AnsweredBy': None,
                 'ApiVersion': self.version,
                 'ForwardedFrom': None,
