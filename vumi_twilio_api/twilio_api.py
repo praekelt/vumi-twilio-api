@@ -59,6 +59,49 @@ class TwilioAPIWorker(ApplicationWorker):
         yield self.webserver.loseConnection()
         yield self.session_manager.stop()
 
+    def _http_request(self, url='', method='GET', data={}):
+        return treq.request(method, url, persistent=False, data=data)
+
+    @inlineCallbacks
+    def _handle_connected_call(self, session_id, session):
+        session['Status'] = 'in-progress'
+        self.session_manager.save_session(session_id, session)
+
+        data = {
+            'CallSid': session['CallId'],
+            'AccountSid': session['AccountSid'],
+            'From': session['From'],
+            'To': session['To'],
+            'CallStatus': session['Status'],
+            'ApiVersion': self.config.api_version,
+            'Direction': session['Direction'],
+        }
+
+        twiml_raw = yield self._http_request(
+            session['Url'], session['Method'], data)
+        if twiml_raw.code < 200 or twiml_raw.code >= 300:
+            twiml_raw = yield self._http_request(
+                session['FallbackUrl'], session['FallbackMethod'], data)
+        twiml_raw = yield twiml_raw.content()
+        twiml = self.twiml_parser.parse(twiml_raw)
+        for verb in twiml:
+            self._handle_twiml_verb(verb)
+
+    def _handle_twiml_verb(self):
+        pass
+
+    @inlineCallbacks
+    def consume_ack(self, event):
+        # TODO: Support sending ForwardedFrom parameter
+        # TODO: Support sending CallerName parameter
+        # TODO: Support sending geographic data parameters
+        message_id = event['user_message_id']
+        message = yield self.message_store.get_outbound_message(message_id)
+        session = yield self.session_manager.load_session(message['to_addr'])
+
+        if session['Status'] == 'queued':
+            yield self._handle_connected_call(message['to_addr'], session)
+
 
 class TwilioAPIUsageException(Exception):
     """Called when in incorrect query is sent to the API"""
