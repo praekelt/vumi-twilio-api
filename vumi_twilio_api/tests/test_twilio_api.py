@@ -109,6 +109,9 @@ class TestTwilioAPIServer(VumiTestCase):
     def _twilio_client_create_call(self, filename, *args, **kwargs):
         addr = self.twiml_connection.getHost()
         url = 'http://%s:%s%s%s' % (addr.host, addr.port, '/twiml/', filename)
+        if kwargs.get('fallback_url'):
+            kwargs['fallback_url'] = 'http://%s:%s%s%s' % (
+                addr.host, addr.port, '/twiml/', kwargs['fallback_url'])
         return deferToThread(
             self.client.calls.create, *args, url=url, **kwargs)
 
