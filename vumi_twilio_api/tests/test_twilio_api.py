@@ -4,6 +4,7 @@ from klein import Klein
 from mock import Mock
 import re
 import treq
+from twilio import twiml
 from twilio.rest import TwilioRestClient
 from twilio.rest.exceptions import TwilioRestException
 from twisted.internet.defer import inlineCallbacks
@@ -28,7 +29,7 @@ class TwiMLServer(object):
     @app.route('/<string:filename>')
     def get_twiml(self, request, filename):
         request.setHeader('Content-Type', 'application/xml')
-        return ET.tostring(self._responses[filename])
+        return str(self._responses[filename])
 
 
 class TestTwiMLServer(VumiTestCase):
@@ -36,7 +37,7 @@ class TestTwiMLServer(VumiTestCase):
     @inlineCallbacks
     def setUp(self):
         self.app_helper = self.add_helper(ApplicationHelper(
-            TwilioAPIWorker, transport_type='voice'))
+            TwilioAPIWorker, use_riak=True, transport_type='voice'))
         self.worker = yield self.app_helper.get_application({
             'web_path': '/api',
             'web_port': 8080,
@@ -56,16 +57,17 @@ class TestTwiMLServer(VumiTestCase):
 
     @inlineCallbacks
     def test_getting_response(self):
-        response = ET.Element('Foo')
-        bar = ET.SubElement(response, 'Bar')
+        response = twiml.Response()
+        response.say("Hello")
         self.twiml_server.add_response('example.xml', response)
 
         request = yield self._server_request('example.xml')
         request = yield request.content()
         root = ET.fromstring(request)
-        self.assertEqual(root.tag, response.tag)
+        self.assertEqual(root.tag, 'Response')
         [child] = list(root)
-        self.assertEqual(child.tag, bar.tag)
+        self.assertEqual(child.tag, 'Say')
+        self.assertEqual(child.text, 'Hello')
 
 
 class TestTwilioAPIServer(VumiTestCase):
