@@ -99,6 +99,7 @@ class TestTwilioAPIServer(VumiTestCase):
             'web_port': 8080,
             'api_version': 'v1',
             'client_path': 'http://localhost:8081/twiml/',
+            'status_callback_path': 'http://localhost:8081/twiml/callback.xml',
         })
         addr = self.worker.webserver.getHost()
         self.url = 'http://%s:%s%s' % (addr.host, addr.port, '/api')
@@ -119,6 +120,9 @@ class TestTwilioAPIServer(VumiTestCase):
         if kwargs.get('fallback_url'):
             kwargs['fallback_url'] = 'http://%s:%s%s%s' % (
                 addr.host, addr.port, '/twiml/', kwargs['fallback_url'])
+        if kwargs.get('status_callback'):
+            kwargs['status_callback'] = 'http://%s:%s%s%s' % (
+                addr.host, addr.port, '/twiml/', kwargs['status_callback'])
         return deferToThread(
             self.client.calls.create, *args, url=url, **kwargs)
 
@@ -458,6 +462,43 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(verb.tag, 'Say')
         self.assertEqual(verb.text, 'foobar')
 
+    @inlineCallbacks
+    def test_outgoing_call_ended_status_callback(self):
+        self.twiml_server.add_response('callback.xml', twiml.Response())
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321',
+            status_callback='callback.xml')
+
+        msg = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event=TransportUserMessage.SESSION_CLOSE)
+        yield self.app_helper.dispatch_inbound(msg)
+        [callback] = self.twiml_server.requests
+        self.assertEqual(callback['filename'], 'callback.xml')
+        self.assertEqual(callback['request'].args['CallStatus'], ['completed'])
+        sessions = yield self.worker.session_manager.active_sessions()
+        self.assertEqual(len(sessions), 0)
+
+    @inlineCallbacks
+    def test_incoming_call_ended_status_callback(self):
+        self.twiml_server.add_response('', twiml.Response())
+        self.twiml_server.add_response('callback.xml', twiml.Response())
+
+        msg_start = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event = TransportUserMessage.SESSION_NEW)
+        msg_end = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event = TransportUserMessage.SESSION_CLOSE)
+        
+        yield self.app_helper.dispatch_inbound(msg_start)
+        yield self.app_helper.dispatch_inbound(msg_end)
+
+        [_, callback] = self.twiml_server.requests
+        self.assertEqual(callback['filename'], 'callback.xml')
+        self.assertEqual(callback['request'].args['CallStatus'], ['completed'])
+        sessions = yield self.worker.session_manager.active_sessions()
+        self.assertEqual(len(sessions), 0)
 
 class TestServerFormatting(TestCase):
 

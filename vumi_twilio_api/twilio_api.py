@@ -38,6 +38,12 @@ class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
     client_method = ConfigText(
         "The HTTP method that the API worker uses when sending requests",
         default='POST', static=True)
+    status_callback_path = ConfigText(
+        "The web path that the API sends a request to when the call ends",
+        default=None, static=True)
+    status_callback_method = ConfigText(
+        "The HTTP method to use when sending the callback status",
+        default='POST', static=True)
 
 
 class TwilioAPIWorker(ApplicationWorker):
@@ -136,6 +142,8 @@ class TwilioAPIWorker(ApplicationWorker):
             'Direction': 'inbound',
             'Url': self.config.client_path,
             'Method': self.config.client_method,
+            'StatusCallback': self.config.status_callback_path,
+            'StatusCallbackMethod': self.config.status_callback_method,
         }
         yield self.session_manager.create_session(
             message['from_addr'], **session)
@@ -143,6 +151,22 @@ class TwilioAPIWorker(ApplicationWorker):
         twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
             self._handle_twiml_verb(verb)
+
+    @inlineCallbacks
+    def close_session(self, message):
+        # TODO: Implement call duration parameters
+        # TODO: Implement recording parameters
+        yield self.message_store.add_inbound_message(message)
+        session = yield self.session_manager.load_session(message['from_addr'])
+        yield self.session_manager.clear_session(message['from_addr'])
+        url = session.get('StatusCallback')
+
+        if url and url != 'None':
+            session['Status'] = 'completed'
+            data = self._request_data_from_session(session)
+            yield self._http_request(
+                session['StatusCallback'], session['StatusCallbackMethod'],
+                data)
 
 
 class TwilioAPIUsageException(Exception):
