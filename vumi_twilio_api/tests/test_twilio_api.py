@@ -47,7 +47,7 @@ class TwiMLServer(object):
     @app.route('/')
     def get_root(self, request):
         return self.get_twiml(request, '')
-    
+
 
 class TestTwiMLServer(VumiTestCase):
 
@@ -411,8 +411,9 @@ class TestTwilioAPIServer(VumiTestCase):
         response = twiml.Response()
         response.say('foobar')
         self.twiml_server.add_response('default.xml', response)
-        
+
         twimls = []
+
         def parse_Say(twiml):
             twimls.append(twiml)
         self.worker.twiml_parser._parse_Say = parse_Say
@@ -436,7 +437,7 @@ class TestTwilioAPIServer(VumiTestCase):
         [req] = self.twiml_server.requests
         self.assertEqual(req['filename'], '')
         self.assertEqual(req['request'].args['Direction'], ['inbound'])
-        
+
 
 class TestServerFormatting(TestCase):
 

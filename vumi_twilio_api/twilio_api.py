@@ -91,7 +91,8 @@ class TwilioAPIWorker(ApplicationWorker):
         returnValue(self.twiml_parser.parse(twiml_raw))
 
     @inlineCallbacks
-    def _handle_connected_call(self, session_id, session, status='in-progress'):
+    def _handle_connected_call(
+            self, session_id, session, status='in-progress'):
         # TODO: Support sending ForwardedFrom parameter
         # TODO: Support sending CallerName parameter
         # TODO: Support sending geographic data parameters
@@ -120,7 +121,8 @@ class TwilioAPIWorker(ApplicationWorker):
         session = yield self.session_manager.load_session(message['to_addr'])
 
         if session['Status'] == 'queued':
-            yield self._handle_connected_call(message['to_addr'], session, status='failed')
+            yield self._handle_connected_call(
+                message['to_addr'], session, status='failed')
 
     @inlineCallbacks
     def new_session(self, message):
