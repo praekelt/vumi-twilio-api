@@ -32,6 +32,12 @@ class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
         default="2010-04-01", static=True)
     redis_manager = ConfigDict("Redis config.", required=True, static=True)
     riak_manager = ConfigRiak("Riak config.", required=True, static=True)
+    client_path = ConfigText(
+        "The web path that the API worker should send requests to",
+        required=True, static=True)
+    client_method = ConfigText(
+        "The HTTP method that the API worker uses when sending requests",
+        default='POST', static=True)
 
 
 class TwilioAPIWorker(ApplicationWorker):
@@ -62,15 +68,8 @@ class TwilioAPIWorker(ApplicationWorker):
     def _http_request(self, url='', method='GET', data={}):
         return treq.request(method, url, persistent=False, data=data)
 
-    @inlineCallbacks
-    def _handle_connected_call(self, session_id, session, status='in-progress'):
-        # TODO: Support sending ForwardedFrom parameter
-        # TODO: Support sending CallerName parameter
-        # TODO: Support sending geographic data parameters
-        session['Status'] = status
-        self.session_manager.save_session(session_id, session)
-
-        data = {
+    def _request_data_from_session(self, session):
+        return {
             'CallSid': session['CallId'],
             'AccountSid': session['AccountSid'],
             'From': session['From'],
@@ -80,13 +79,25 @@ class TwilioAPIWorker(ApplicationWorker):
             'Direction': session['Direction'],
         }
 
+    @inlineCallbacks
+    def _get_twiml_from_client(self, session):
+        data = self._request_data_from_session(session)
         twiml_raw = yield self._http_request(
             session['Url'], session['Method'], data)
         if twiml_raw.code < 200 or twiml_raw.code >= 300:
             twiml_raw = yield self._http_request(
                 session['FallbackUrl'], session['FallbackMethod'], data)
         twiml_raw = yield twiml_raw.content()
-        twiml = self.twiml_parser.parse(twiml_raw)
+        returnValue(self.twiml_parser.parse(twiml_raw))
+
+    @inlineCallbacks
+    def _handle_connected_call(self, session_id, session, status='in-progress'):
+        # TODO: Support sending ForwardedFrom parameter
+        # TODO: Support sending CallerName parameter
+        # TODO: Support sending geographic data parameters
+        session['Status'] = status
+        self.session_manager.save_session(session_id, session)
+        twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
             self._handle_twiml_verb(verb)
 
@@ -110,6 +121,26 @@ class TwilioAPIWorker(ApplicationWorker):
 
         if session['Status'] == 'queued':
             yield self._handle_connected_call(message['to_addr'], session, status='failed')
+
+    @inlineCallbacks
+    def new_session(self, message):
+        yield self.message_store.add_inbound_message(message)
+        session = {
+            'CallId': self.server._get_sid(),
+            'AccountSid': self.server._get_sid(),
+            'From': message['from_addr'],
+            'To': message['to_addr'],
+            'Status': 'in-progress',
+            'Direction': 'inbound',
+            'Url': self.config.client_path,
+            'Method': self.config.client_method,
+        }
+        yield self.session_manager.create_session(
+            message['from_addr'], **session)
+
+        twiml = yield self._get_twiml_from_client(session)
+        for verb in twiml:
+            self._handle_twiml_verb(verb)
 
 
 class TwilioAPIUsageException(Exception):

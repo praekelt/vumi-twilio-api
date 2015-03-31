@@ -11,6 +11,7 @@ from twisted.internet.defer import inlineCallbacks
 from twisted.internet.threads import deferToThread
 from twisted.trial.unittest import TestCase
 from vumi.application.tests.helpers import ApplicationHelper
+from vumi.message import TransportUserMessage
 from vumi.tests.helpers import VumiTestCase
 import xml.etree.ElementTree as ET
 
@@ -43,6 +44,10 @@ class TwiMLServer(object):
         request.setHeader('Content-Type', 'application/xml')
         return str(self._responses[filename])
 
+    @app.route('/')
+    def get_root(self, request):
+        return self.get_twiml(request, '')
+    
 
 class TestTwiMLServer(VumiTestCase):
 
@@ -54,6 +59,7 @@ class TestTwiMLServer(VumiTestCase):
             'web_path': '/api',
             'web_port': 8080,
             'api_version': 'v1',
+            'client_path': 'http://localhost:8081/twiml/',
         })
 
         self.twiml_server = TwiMLServer()
@@ -92,6 +98,7 @@ class TestTwilioAPIServer(VumiTestCase):
             'web_path': '/api',
             'web_port': 8080,
             'api_version': 'v1',
+            'client_path': 'http://localhost:8081/twiml/',
         })
         addr = self.worker.webserver.getHost()
         self.url = 'http://%s:%s%s' % (addr.host, addr.port, '/api')
@@ -418,6 +425,18 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(command.tag, 'Say')
         self.assertEqual(command.text, 'foobar')
 
+    @inlineCallbacks
+    def test_receive_call(self):
+        response = twiml.Response()
+        self.twiml_server.add_response('', response)
+        msg = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event=TransportUserMessage.SESSION_NEW)
+        yield self.app_helper.dispatch_inbound(msg)
+        [req] = self.twiml_server.requests
+        self.assertEqual(req['filename'], '')
+        self.assertEqual(req['request'].args['Direction'], ['inbound'])
+        
 
 class TestServerFormatting(TestCase):
 
