@@ -102,6 +102,14 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertTrue(re.search(regexp, text), msg=msg)
 
     @inlineCallbacks
+    def assert_parameter_missing(self, url, method='GET', error={}, data={}):
+        response = yield self._server_request(
+            url, method=method, data=data)
+        self.assertEqual(response.code, 400)
+        response = yield response.json()
+        self.assertEqual(response, error)
+
+    @inlineCallbacks
     def test_root_default(self):
         response = yield self._server_request()
         self.assertEqual(
@@ -241,14 +249,14 @@ class TestTwilioAPIServer(VumiTestCase):
             addr.host, addr.port, '/twiml/', 'example.xml')
 
         # Can't use the client here because it requires the required parameters
-        response = yield self._server_request(
-            '/Accounts/test-account/Calls.json', method='POST',
-            data={'From': '+12345', 'Url': url})
-        self.assertEqual(response.code, 400)
-        response = yield response.json()
-        self.assertEqual(response['error_type'], 'UsageError')
-        self.assertEqual(
-            response['error_message'], "Required field 'To' not supplied")
+        yield self.assert_parameter_missing(
+            '/Accounts/test-account/Calls.json', 'POST', data={
+                'From': '+12345', 'Url': url},
+            error={
+                'error_type': 'UsageError',
+                'error_message': 
+                    "Required field 'To' not supplied",
+            })
 
     @inlineCallbacks
     def test_make_call_required_parameters_from(self):
@@ -257,14 +265,14 @@ class TestTwilioAPIServer(VumiTestCase):
             addr.host, addr.port, '/twiml/', 'example.xml')
 
         # Can't use the client here because it requires the required parameters
-        response = yield self._server_request(
-            '/Accounts/test-account/Calls.json', method='POST',
-            data={'To': '+12345', 'Url': url})
-        self.assertEqual(response.code, 400)
-        response = yield response.json()
-        self.assertEqual(response['error_type'], 'UsageError')
-        self.assertEqual(
-            response['error_message'], "Required field 'From' not supplied")
+        yield self.assert_parameter_missing(
+            '/Accounts/test-account/Calls.json', 'POST', data={
+                'To': '+12345', 'Url': url},
+            error={
+                'error_type': 'UsageError',
+                'error_message': 
+                    "Required field 'From' not supplied",
+            })
 
     @inlineCallbacks
     def test_make_call_required_parameters_url(self):
@@ -273,15 +281,14 @@ class TestTwilioAPIServer(VumiTestCase):
             addr.host, addr.port, '/twiml/', 'example.xml')
 
         # Can't use the client here because it requires the required parameters
-        response = yield self._server_request(
-            '/Accounts/test-account/Calls.json', method='POST',
-            data={'To': '+12345', 'From': '+54321'})
-        self.assertEqual(response.code, 400)
-        response = yield response.json()
-        self.assertEqual(response['error_type'], 'UsageError')
-        self.assertEqual(
-            response['error_message'],
-            "Request must have an 'Url' or an 'ApplicationSid' field")
+        yield self.assert_parameter_missing(
+            '/Accounts/test-account/Calls.json', 'POST', data={
+                'To': '+12345', 'From': '+54321'},
+            error={
+                'error_type': 'UsageError',
+                'error_message': 
+                    "Request must have an 'Url' or an 'ApplicationSid' field",
+            })
 
         response = yield self._server_request(
             '/Accounts/test-account/Calls.json', method='POST',
