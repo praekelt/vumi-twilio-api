@@ -105,10 +105,25 @@ class TestTwilioAPIServer(VumiTestCase):
         self.url = 'http://%s:%s%s' % (addr.host, addr.port, '/api')
         self.client = TwilioRestClient(
             'test_account', 'test_token', base=self.url, version='v1')
+        self.patch_resource_request(self.client.calls)
         self.twiml_server = TwiMLServer()
         self.twiml_connection = self.worker.start_web_resources([
             (self.twiml_server.app.resource(), '/twiml')], 8081)
         self.add_cleanup(self.twiml_connection.loseConnection)
+
+    def patch_resource_request(self, resource):
+        """
+        Patch a TwilioRestClient resource object's request method to force the
+        connection to be closed at the end of the request.
+        """
+        old_request = resource.request
+
+        def request(method, uri, **kwargs):
+            kwargs["headers"] = kwargs.get("headers", {}).copy()
+            kwargs["headers"].setdefault("Connection", "close")
+            return old_request(method, uri, **kwargs)
+
+        self.patch(resource, "request", request)
 
     def _server_request(self, path='', method='GET', data={}):
         url = '%s/v1/%s' % (self.url, path)
