@@ -63,8 +63,11 @@ class TwilioAPIWorker(ApplicationWorker):
         return treq.request(method, url, persistent=False, data=data)
 
     @inlineCallbacks
-    def _handle_connected_call(self, session_id, session):
-        session['Status'] = 'in-progress'
+    def _handle_connected_call(self, session_id, session, status='in-progress'):
+        # TODO: Support sending ForwardedFrom parameter
+        # TODO: Support sending CallerName parameter
+        # TODO: Support sending geographic data parameters
+        session['Status'] = status
         self.session_manager.save_session(session_id, session)
 
         data = {
@@ -92,15 +95,21 @@ class TwilioAPIWorker(ApplicationWorker):
 
     @inlineCallbacks
     def consume_ack(self, event):
-        # TODO: Support sending ForwardedFrom parameter
-        # TODO: Support sending CallerName parameter
-        # TODO: Support sending geographic data parameters
         message_id = event['user_message_id']
         message = yield self.message_store.get_outbound_message(message_id)
         session = yield self.session_manager.load_session(message['to_addr'])
 
         if session['Status'] == 'queued':
             yield self._handle_connected_call(message['to_addr'], session)
+
+    @inlineCallbacks
+    def consume_nack(self, event):
+        message_id = event['user_message_id']
+        message = yield self.message_store.get_outbound_message(message_id)
+        session = yield self.session_manager.load_session(message['to_addr'])
+
+        if session['Status'] == 'queued':
+            yield self._handle_connected_call(message['to_addr'], session, status='failed')
 
 
 class TwilioAPIUsageException(Exception):
