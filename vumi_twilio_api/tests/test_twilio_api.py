@@ -399,6 +399,25 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(req['filename'], 'default.xml')
         self.assertEqual(req['request'].args['CallStatus'], ['failed'])
 
+    @inlineCallbacks
+    def test_make_call_parsing_twiml(self):
+        response = twiml.Response()
+        response.say('foobar')
+        self.twiml_server.add_response('default.xml', response)
+        
+        twimls = []
+        def parse_Say(twiml):
+            twimls.append(twiml)
+        self.worker.twiml_parser._parse_Say = parse_Say
+
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [command] = twimls
+        self.assertEqual(command.tag, 'Say')
+        self.assertEqual(command.text, 'foobar')
+
 
 class TestServerFormatting(TestCase):
 

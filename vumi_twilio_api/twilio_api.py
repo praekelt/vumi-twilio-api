@@ -90,7 +90,7 @@ class TwilioAPIWorker(ApplicationWorker):
         for verb in twiml:
             self._handle_twiml_verb(verb)
 
-    def _handle_twiml_verb(self):
+    def _handle_twiml_verb(self, verb):
         pass
 
     @inlineCallbacks
