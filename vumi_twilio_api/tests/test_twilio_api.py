@@ -438,6 +438,26 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(req['filename'], '')
         self.assertEqual(req['request'].args['Direction'], ['inbound'])
 
+    @inlineCallbacks
+    def test_receive_call_parsing_twiml(self):
+        response = twiml.Response()
+        response.say('foobar')
+        self.twiml_server.add_response('', response)
+
+        twimls = []
+
+        def parse_say(twiml):
+            twimls.append(twiml)
+        self.worker.twiml_parser._parse_Say = parse_say
+
+        msg = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event=TransportUserMessage.SESSION_NEW)
+        yield self.app_helper.dispatch_inbound(msg)
+        [verb] = twimls
+        self.assertEqual(verb.tag, 'Say')
+        self.assertEqual(verb.text, 'foobar')
+
 
 class TestServerFormatting(TestCase):
 
