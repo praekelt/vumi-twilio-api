@@ -255,7 +255,7 @@ class TestTwilioAPIServer(VumiTestCase):
                 'From': '+12345', 'Url': url},
             error={
                 'error_type': 'UsageError',
-                'error_message': 
+                'error_message':
                     "Required field 'To' not supplied",
             })
 
@@ -271,7 +271,7 @@ class TestTwilioAPIServer(VumiTestCase):
                 'To': '+12345', 'Url': url},
             error={
                 'error_type': 'UsageError',
-                'error_message': 
+                'error_message':
                     "Required field 'From' not supplied",
             })
 
@@ -287,7 +287,7 @@ class TestTwilioAPIServer(VumiTestCase):
                 'To': '+12345', 'From': '+54321'},
             error={
                 'error_type': 'UsageError',
-                'error_message': 
+                'error_message':
                     "Request must have an 'Url' or an 'ApplicationSid' field",
             })
 
