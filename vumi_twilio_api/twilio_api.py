@@ -13,6 +13,23 @@ from vumi.message import TransportUserMessage
 import xml.etree.ElementTree as ET
 
 
+c2s = re.compile('(?!^)([A-Z+])')
+
+
+def camel_to_snake(string):
+    return c2s.sub(r'_\1', string).lower()
+
+
+def convert_dict_keys(dct):
+    res = {}
+    for key, value in dct.iteritems():
+        if isinstance(value, dict):
+            res[camel_to_snake(key)] = convert_dict_keys(value)
+        else:
+            res[camel_to_snake(key)] = value
+    return res
+
+
 class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
     """Config for the Twilio API worker"""
     web_path = ConfigText(
@@ -83,20 +100,6 @@ class TwilioAPIServer(object):
             dct = dct['Call']
         if dct.get('Version'):
             dct = dct['Version']
-        c2s = re.compile('(?!^)([A-Z+])')
-
-        def camel_to_snake(string):
-            return c2s.sub(r'_\1', string).lower()
-
-        def convert_dict_keys(dct):
-            res = {}
-            for key, value in dct.iteritems():
-                if isinstance(value, dict):
-                    res[camel_to_snake(key)] = convert_dict_keys(value)
-                else:
-                    res[camel_to_snake(key)] = value
-            return res
-
         return json.dumps(convert_dict_keys(dct))
 
     def _format_response(self, request, dct, format_):
