@@ -180,7 +180,8 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(response.code, 400)
         content = yield response.content()
         root = ET.fromstring(content)
-        [error_message, error_type] = sorted(root, key=lambda c: c.tag)
+        [error] = list(root)
+        [error_message, error_type] = sorted(error, key=lambda c: c.tag)
         self.assertEqual(error_message.tag, 'error_message')
         self.assertEqual(
             error_message.text, "'foo' is not a valid request format")
@@ -382,13 +383,15 @@ class TestServerFormatting(TestCase):
     def test_format_json(self):
         format_json = TwilioAPIServer.format_json
         d = {
-            'Foo': {
-                'Bar': {
-                    'Baz': 'Qux',
+            'Root': {
+                'Foo': {
+                    'Bar': {
+                        'Baz': 'Qux',
+                    },
+                    'FooBar': 'BazQux',
                 },
-                'FooBar': 'BazQux',
-            },
-            'BarFoo': 'QuxBaz',
+                'BarFoo': 'QuxBaz',
+            }
         }
         res = format_json(d)
         root = json.loads(res)

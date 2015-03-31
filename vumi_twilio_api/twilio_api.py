@@ -96,10 +96,7 @@ class TwilioAPIServer(object):
 
     @staticmethod
     def format_json(dct):
-        if dct.get('Call'):
-            dct = dct['Call']
-        if dct.get('Version'):
-            dct = dct['Version']
+        _, dct = dct.popitem()
         return json.dumps(convert_dict_keys(dct))
 
     def _format_response(self, request, dct, format_):
@@ -117,9 +114,11 @@ class TwilioAPIServer(object):
         request.setResponseCode(400)
         return self._format_response(
             request, {
-                'error_type': 'UsageError',
-                'error_message': failure.value.message
-                },
+                'Error': {
+                    'error_type': 'UsageError',
+                    'error_message': failure.value.message
+                }
+            },
             failure.value.format_)
 
     @app.route('/', defaults={'format_': ''}, methods=['GET'])
