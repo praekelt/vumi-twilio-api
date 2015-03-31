@@ -1,5 +1,5 @@
 from datetime import datetime
-from dateutil.tz import tzlocal
+from dateutil.tz import tzutc
 import json
 from klein import Klein
 import os
@@ -199,7 +199,7 @@ class TwilioAPIServer(object):
         return str(uuid.uuid4()).replace('-', '')
 
     def _get_timestamp(self):
-        return datetime.now(tzlocal()).strftime('%a, %d %b %Y %H:%M:%S %z')
+        return datetime.now(tzutc()).strftime('%a, %d %b %Y %H:%M:%S %z')
 
     def _get_field(self, request, field, default=None):
         return request.args.get(field, [default])[0]
