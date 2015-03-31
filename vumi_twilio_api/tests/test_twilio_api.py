@@ -361,6 +361,44 @@ class TestTwilioAPIServer(VumiTestCase):
             message['error_message'],
             "IfMachine value must be one of [None, 'Continue', 'Hangup']")
 
+    @inlineCallbacks
+    def test_make_call_ack_fallback_url(self):
+        self.twiml_server.add_err('err.xml', 'Error response')
+        response = twiml.Response()
+        self.twiml_server.add_response('default.xml', response)
+        yield self._twilio_client_create_call(
+            'err.xml', from_='+12345', to='+54321',
+            fallback_url='default.xml')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [bad, req] = self.twiml_server.requests
+        self.assertEqual(req['filename'], 'default.xml')
+        self.assertEqual(bad['filename'], 'err.xml')
+
+    @inlineCallbacks
+    def test_make_call_ack_response(self):
+        response = twiml.Response()
+        self.twiml_server.add_response('default.xml', response)
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [req] = self.twiml_server.requests
+        self.assertEqual(req['filename'], 'default.xml')
+        self.assertEqual(req['request'].args['CallStatus'], ['in-progress'])
+
+    @inlineCallbacks
+    def test_make_call_nack_response(self):
+        response = twiml.Response()
+        self.twiml_server.add_response('default.xml', response)
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_nack(msg))
+        [req] = self.twiml_server.requests
+        self.assertEqual(req['filename'], 'default.xml')
+        self.assertEqual(req['request'].args['CallStatus'], ['failed'])
+
 
 class TestServerFormatting(TestCase):
 
