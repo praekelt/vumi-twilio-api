@@ -12,9 +12,9 @@ setup(
     packages=find_packages(),
     scripts=[],
     install_requires=[
+        'vumi',
         'klein',
         'treq',
-        'vumi',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',
