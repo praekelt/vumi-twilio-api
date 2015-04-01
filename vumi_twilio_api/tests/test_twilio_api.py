@@ -7,12 +7,14 @@ import treq
 from twilio import twiml
 from twilio.rest import TwilioRestClient
 from twilio.rest.exceptions import TwilioRestException
+from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.threads import deferToThread
 from twisted.trial.unittest import TestCase
 from vumi.application.tests.helpers import ApplicationHelper
 from vumi.message import TransportUserMessage
 from vumi.tests.helpers import VumiTestCase
+from vumi.utils import LogFilterSite
 import xml.etree.ElementTree as ET
 
 from vumi_twilio_api.twilio_api import TwilioAPIServer, TwilioAPIWorker
@@ -48,29 +50,31 @@ class TwiMLServer(object):
     def get_root(self, request):
         return self.get_twiml(request, '')
 
+    @inlineCallbacks
+    def start(self):
+        site_factory = LogFilterSite(self.app.resource())
+        self._webserver = yield reactor.listenTCP(
+            0, site_factory, interface='127.0.0.1')
+        self.addr = self._webserver.getHost()
+        self.url = "http://%s:%s/" % (self.addr.host, self.addr.port)
+
+    @inlineCallbacks
+    def stop(self):
+        yield self._webserver.stopListening()
+        yield self._webserver.loseConnection()
+
 
 class TestTwiMLServer(VumiTestCase):
 
     @inlineCallbacks
     def setUp(self):
-        self.app_helper = self.add_helper(ApplicationHelper(
-            TwilioAPIWorker, use_riak=True, transport_type='voice'))
-        self.worker = yield self.app_helper.get_application({
-            'web_path': '/api',
-            'web_port': 8080,
-            'api_version': 'v1',
-            'client_path': 'http://localhost:8081/twiml/',
-        })
-
         self.twiml_server = TwiMLServer()
-        self.twiml_connection = self.worker.start_web_resources([
-            (self.twiml_server.app.resource(), '/twiml')], 8081)
-        self.add_cleanup(self.twiml_connection.loseConnection)
-        addr = self.twiml_connection.getHost()
-        self.url = 'http://%s:%s' % (addr.host, addr.port)
+        yield self.twiml_server.start()
+        self.add_cleanup(self.twiml_server.stop)
+        self.url = self.twiml_server.url
 
     def _server_request(self, path='', method='GET', data={}):
-        url = '%s/twiml/%s' % (self.url, path)
+        url = '%s/%s' % (self.url, path)
         return treq.request(method, url, persistent=False, data=data)
 
     @inlineCallbacks
@@ -92,24 +96,24 @@ class TestTwilioAPIServer(VumiTestCase):
 
     @inlineCallbacks
     def setUp(self):
+        self.twiml_server = TwiMLServer()
+        yield self.twiml_server.start()
+        self.add_cleanup(self.twiml_server.stop)
+
         self.app_helper = self.add_helper(ApplicationHelper(
             TwilioAPIWorker, use_riak=True, transport_type='voice'))
         self.worker = yield self.app_helper.get_application({
             'web_path': '/api',
-            'web_port': 8080,
+            'web_port': 0,
             'api_version': 'v1',
-            'client_path': 'http://localhost:8081/twiml/',
-            'status_callback_path': 'http://localhost:8081/twiml/callback.xml',
+            'client_path': '%s' % self.twiml_server.url,
+            'status_callback_path': '%s/callback.xml' % self.twiml_server.url,
         })
         addr = self.worker.webserver.getHost()
         self.url = 'http://%s:%s%s' % (addr.host, addr.port, '/api')
         self.client = TwilioRestClient(
             'test_account', 'test_token', base=self.url, version='v1')
         self.patch_resource_request(self.client.calls)
-        self.twiml_server = TwiMLServer()
-        self.twiml_connection = self.worker.start_web_resources([
-            (self.twiml_server.app.resource(), '/twiml')], 8081)
-        self.add_cleanup(self.twiml_connection.loseConnection)
 
     def patch_resource_request(self, resource):
         """
@@ -130,14 +134,13 @@ class TestTwilioAPIServer(VumiTestCase):
         return treq.request(method, url, persistent=False, data=data)
 
     def _twilio_client_create_call(self, filename, *args, **kwargs):
-        addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (addr.host, addr.port, '/twiml/', filename)
+        url = '%s/%s' % (self.twiml_server.url, filename)
         if kwargs.get('fallback_url'):
-            kwargs['fallback_url'] = 'http://%s:%s%s%s' % (
-                addr.host, addr.port, '/twiml/', kwargs['fallback_url'])
+            kwargs['fallback_url'] = '%s/%s' % (
+                self.twiml_server.url, kwargs['fallback_url'])
         if kwargs.get('status_callback'):
-            kwargs['status_callback'] = 'http://%s:%s%s%s' % (
-                addr.host, addr.port, '/twiml/', kwargs['status_callback'])
+            kwargs['status_callback'] = '%s/%s' % (
+                self.twiml_server.url, kwargs['status_callback'])
         return deferToThread(
             self.client.calls.create, *args, url=url, **kwargs)
 
@@ -288,14 +291,10 @@ class TestTwilioAPIServer(VumiTestCase):
 
     @inlineCallbacks
     def test_make_call_required_parameters_to(self):
-        addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (
-            addr.host, addr.port, '/twiml/', 'example.xml')
-
         # Can't use the client here because it requires the required parameters
         yield self.assert_parameter_missing(
             '/Accounts/test-account/Calls.json', 'POST', data={
-                'From': '+12345', 'Url': url},
+                'From': '+12345', 'Url': self.twiml_server.url},
             error={
                 'error_type': 'UsageError',
                 'error_message':
@@ -304,14 +303,10 @@ class TestTwilioAPIServer(VumiTestCase):
 
     @inlineCallbacks
     def test_make_call_required_parameters_from(self):
-        addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (
-            addr.host, addr.port, '/twiml/', 'example.xml')
-
         # Can't use the client here because it requires the required parameters
         yield self.assert_parameter_missing(
             '/Accounts/test-account/Calls.json', 'POST', data={
-                'To': '+12345', 'Url': url},
+                'To': '+12345', 'Url': self.twiml_server.url},
             error={
                 'error_type': 'UsageError',
                 'error_message':
@@ -320,10 +315,6 @@ class TestTwilioAPIServer(VumiTestCase):
 
     @inlineCallbacks
     def test_make_call_required_parameters_url(self):
-        addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (
-            addr.host, addr.port, '/twiml/', 'example.xml')
-
         # Can't use the client here because it requires the required parameters
         yield self.assert_parameter_missing(
             '/Accounts/test-account/Calls.json', 'POST', data={
@@ -336,7 +327,7 @@ class TestTwilioAPIServer(VumiTestCase):
 
         response = yield self._server_request(
             '/Accounts/test-account/Calls.json', method='POST',
-            data={'To': '+12345', 'From': '+54321', 'Url': url})
+            data={'To': '+12345', 'From': '+54321', 'Url': self.twiml_server.url})
         self.assertEqual(response.code, 200)
         response = yield response.json()
         self.assertEqual(response['to'], '+12345')
