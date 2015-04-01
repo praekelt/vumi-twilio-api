@@ -6,12 +6,18 @@ services:
   - "riak"
 cache:
   - "pip"
+matrix:
+  include:
+    - python: "pypy"
+      env: NO_COVERAGE="1"
 install:
   - "pip install -r requirements.pip"
   - "pip install -r requirements-dev.pip"
   - "pip install coveralls"
   - "python setup.py install"
 script:
+  - if [ -z "$NO_COVERAGE" ]; then COVERAGE_CMD="coverage run --source=vumi_twilio_api"; else COVERAGE_CMD=""; fi
+  - $COVERAGE_CMD `which trial` vumi_twilio_api
   - "coverage run --source=vumi_twilio_api `which trial` vumi_twilio_api"
 after_success:
-  - coveralls
+    - if [ -z "$NO_COVERAGE" ]; then coveralls; fi
