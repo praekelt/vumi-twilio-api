@@ -1,5 +1,5 @@
 from datetime import datetime
-from dateutil.tz import tzlocal
+from dateutil.tz import tzutc
 import json
 from klein import Klein
 import os
@@ -17,6 +17,23 @@ from vumi.persist.txriak_manager import TxRiakManager
 import xml.etree.ElementTree as ET
 
 from vumi_twilio_api.twiml_parser import TwiMLParser
+
+
+c2s = re.compile('(?!^)([A-Z+])')
+
+
+def camel_to_snake(string):
+    return c2s.sub(r'_\1', string).lower()
+
+
+def convert_dict_keys(dct):
+    res = {}
+    for key, value in dct.iteritems():
+        if isinstance(value, dict):
+            res[camel_to_snake(key)] = convert_dict_keys(value)
+        else:
+            res[camel_to_snake(key)] = value
+    return res
 
 
 class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
@@ -198,24 +215,7 @@ class TwilioAPIServer(object):
 
     @staticmethod
     def format_json(dct):
-        if dct.get('Call'):
-            dct = dct['Call']
-        if dct.get('Version'):
-            dct = dct['Version']
-        c2s = re.compile('(?!^)([A-Z+])')
-
-        def camel_to_snake(string):
-            return c2s.sub(r'_\1', string).lower()
-
-        def convert_dict_keys(dct):
-            res = {}
-            for key, value in dct.iteritems():
-                if isinstance(value, dict):
-                    res[camel_to_snake(key)] = convert_dict_keys(value)
-                else:
-                    res[camel_to_snake(key)] = value
-            return res
-
+        _, dct = dct.popitem()
         return json.dumps(convert_dict_keys(dct))
 
     def _format_response(self, request, dct, format_):
@@ -233,9 +233,11 @@ class TwilioAPIServer(object):
         request.setResponseCode(400)
         return self._format_response(
             request, {
-                'error_type': 'UsageError',
-                'error_message': failure.value.message
-                },
+                'Error': {
+                    'error_type': 'UsageError',
+                    'error_message': failure.value.message
+                }
+            },
             failure.value.format_)
 
     @app.route('/', defaults={'format_': ''}, methods=['GET'])
@@ -321,7 +323,7 @@ class TwilioAPIServer(object):
         return str(uuid.uuid4()).replace('-', '')
 
     def _get_timestamp(self):
-        return datetime.now(tzlocal()).strftime('%a, %d %b %Y %H:%M:%S %z')
+        return datetime.now(tzutc()).strftime('%a, %d %b %Y %H:%M:%S %z')
 
     def _get_field(self, request, field, default=None):
         return request.args.get(field, [default])[0]
