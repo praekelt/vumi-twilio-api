@@ -193,6 +193,32 @@ class TwilioAPIUsageException(Exception):
         self.format_ = format_
 
 
+class Error(object):
+    """Error HTTP response object, returned for incorred API queries"""
+    def __init__(self, error_type, error_message):
+        self.error_type = error_type
+        self.error_message = error_message
+
+    @classmethod
+    def from_exception(cls, exception):
+        return cls(exception.__class__.__name__, exception.message)
+
+
+class Version(object):
+    """Version HTTP response object, returned for root resource"""
+    def __init__(self, name, uri, **kwargs):
+        self.Name = name
+        self.Uri = uri
+        self.SubresourceUris = kwargs
+
+
+class Call(object):
+    """Call HTTP response object, returned for the Calls resource"""
+    def __init__(self, **kwargs):
+        for key, value in kwargs.iteritems():
+            setattr(self, key, value)
+
+
 class TwilioAPIServer(object):
     app = Klein()
 
@@ -201,22 +227,26 @@ class TwilioAPIServer(object):
         self.version = version
 
     @staticmethod
-    def format_xml(dct, root=None):
-        if root is None:
-            root = ET.Element('TwilioResponse')
-        for key, value in dct.iteritems():
-            if isinstance(value, dict):
-                sub = ET.SubElement(root, key)
-                TwilioAPIServer.format_xml(value, root=sub)
-            else:
-                sub = ET.SubElement(root, key)
-                sub.text = value
-        return ET.tostring(root)
+    def format_xml(obj):
+        response = ET.Element("TwilioResponse")
+        root = ET.SubElement(response, obj.__class__.__name__)
+
+        def format_xml_rec(dct, root):
+            for key, value in dct.iteritems():
+                if isinstance(value, dict):
+                    sub = ET.SubElement(root, key)
+                    format_xml_rec(value, sub)
+                else:
+                    sub = ET.SubElement(root, key)
+                    sub.text = value
+            return root
+
+        format_xml_rec(obj.__dict__, root)
+        return ET.tostring(response)
 
     @staticmethod
-    def format_json(dct):
-        _, dct = dct.popitem()
-        return json.dumps(convert_dict_keys(dct))
+    def format_json(obj):
+        return json.dumps(convert_dict_keys(obj.__dict__))
 
     def _format_response(self, request, dct, format_):
         format_ = str(format_.lstrip('.').lower()) or 'xml'
@@ -232,27 +262,17 @@ class TwilioAPIServer(object):
     def usage_exception(self, request, failure):
         request.setResponseCode(400)
         return self._format_response(
-            request, {
-                'Error': {
-                    'error_type': 'UsageError',
-                    'error_message': failure.value.message
-                }
-            },
+            request, Error.from_exception(failure.value),
             failure.value.format_)
 
     @app.route('/', defaults={'format_': ''}, methods=['GET'])
     @app.route('/<string:format_>', methods=['GET'])
     def root(self, request, format_):
-        ret = {
-            'Version': {
-                'Name': self.version,
-                'Uri': '/%s%s' % (self.version, format_),
-                'SubresourceUris': {
-                    'Accounts': '/%s/Accounts%s' % (self.version, format_),
-                },
-            },
-        }
-        return self._format_response(request, ret, format_)
+        version = Version(
+            self.version,
+            '/%s%s' % (self.version, format_),
+            Accounts='/%s/Accounts%s' % (self.version, format_))
+        return self._format_response(request, version, format_)
 
     @app.route(
         '/Accounts/<string:account_sid>/Calls',
@@ -288,8 +308,8 @@ class TwilioAPIServer(object):
         yield self.vumi_worker.message_store.add_outbound_message(message)
         yield self.vumi_worker.session_manager.create_session(
             message['to_addr'], **fields)
-        returnValue(self._format_response(request, {
-            'Call': {
+        returnValue(self._format_response(request, Call(
+            **{
                 'Sid': fields['CallId'],
                 'DateCreated': fields['DateCreated'],
                 'DateUpdated': fields['DateCreated'],
@@ -316,8 +336,7 @@ class TwilioAPIServer(object):
                         fields['Uri'], format_),
                     'Recordings': '%s/Recordings%s' % (fields['Uri'], format_),
                 }
-            }
-        }, format_))
+            }), format_))
 
     def _get_sid(self):
         return str(uuid.uuid4()).replace('-', '')
