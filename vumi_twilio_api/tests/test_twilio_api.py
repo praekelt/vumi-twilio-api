@@ -232,7 +232,7 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(
             error_message.text, "'foo' is not a valid request format")
         self.assertEqual(error_type.tag, 'error_type')
-        self.assertEqual(error_type.text, 'UsageError')
+        self.assertEqual(error_type.text, 'TwilioAPIUsageException')
 
     @inlineCallbacks
     def test_make_call_sid(self):
@@ -296,7 +296,7 @@ class TestTwilioAPIServer(VumiTestCase):
             '/Accounts/test-account/Calls.json', 'POST', data={
                 'From': '+12345', 'Url': self.twiml_server.url},
             error={
-                'error_type': 'UsageError',
+                'error_type': 'TwilioAPIUsageException',
                 'error_message':
                     "Required field 'To' not supplied",
             })
@@ -308,7 +308,7 @@ class TestTwilioAPIServer(VumiTestCase):
             '/Accounts/test-account/Calls.json', 'POST', data={
                 'To': '+12345', 'Url': self.twiml_server.url},
             error={
-                'error_type': 'UsageError',
+                'error_type': 'TwilioAPIUsageException',
                 'error_message':
                     "Required field 'From' not supplied",
             })
@@ -320,14 +320,17 @@ class TestTwilioAPIServer(VumiTestCase):
             '/Accounts/test-account/Calls.json', 'POST', data={
                 'To': '+12345', 'From': '+54321'},
             error={
-                'error_type': 'UsageError',
+                'error_type': 'TwilioAPIUsageException',
                 'error_message':
                     "Request must have an 'Url' or an 'ApplicationSid' field",
             })
 
         response = yield self._server_request(
             '/Accounts/test-account/Calls.json', method='POST',
-            data={'To': '+12345', 'From': '+54321', 'Url': self.twiml_server.url})
+            data={
+                'To': '+12345',
+                'From': '+54321',
+                'Url': self.twiml_server.url})
         self.assertEqual(response.code, 200)
         response = yield response.json()
         self.assertEqual(response['to'], '+12345')
@@ -356,7 +359,7 @@ class TestTwilioAPIServer(VumiTestCase):
             TwilioRestException)
         self.assertEqual(e.status, 400)
         message = json.loads(e.msg)
-        self.assertEqual(message['error_type'], 'UsageError')
+        self.assertEqual(message['error_type'], 'TwilioAPIUsageException')
         self.assertEqual(
             message['error_message'],
             "SendDigits value '0a*' is not valid. May only contain the "
@@ -381,7 +384,7 @@ class TestTwilioAPIServer(VumiTestCase):
             TwilioRestException)
         self.assertEqual(e.status, 400)
         message = json.loads(e.msg)
-        self.assertEqual(message['error_type'], 'UsageError')
+        self.assertEqual(message['error_type'], 'TwilioAPIUsageException')
         self.assertEqual(
             message['error_message'],
             "IfMachine value must be one of [None, 'Continue', 'Hangup']")
@@ -500,11 +503,11 @@ class TestTwilioAPIServer(VumiTestCase):
 
         msg_start = self.app_helper.make_inbound(
             '', from_addr='+54321', to_addr='+12345',
-            session_event = TransportUserMessage.SESSION_NEW)
+            session_event=TransportUserMessage.SESSION_NEW)
         msg_end = self.app_helper.make_inbound(
             '', from_addr='+54321', to_addr='+12345',
-            session_event = TransportUserMessage.SESSION_CLOSE)
-        
+            session_event=TransportUserMessage.SESSION_CLOSE)
+
         yield self.app_helper.dispatch_inbound(msg_start)
         yield self.app_helper.dispatch_inbound(msg_end)
 
@@ -514,21 +517,28 @@ class TestTwilioAPIServer(VumiTestCase):
         sessions = yield self.worker.session_manager.active_sessions()
         self.assertEqual(len(sessions), 0)
 
+
 class TestServerFormatting(TestCase):
 
     def test_format_xml(self):
         format_xml = TwilioAPIServer.format_xml
-        res = format_xml({
-            'foo': {
-                'bar': {
-                    'baz': 'qux',
-                },
-                'foobar': 'bazqux',
-            },
-            'barfoo': 'quxbaz',
-        })
-        root = ET.fromstring(res)
-        self.assertEqual(root.tag, 'TwilioResponse')
+
+        class Test(object):
+            def __init__(self):
+                self.foo = {
+                    'bar': {
+                        'baz': 'qux',
+                    },
+                    'foobar': 'bazqux',
+                }
+                self.barfoo = 'quxbaz'
+        o = Test()
+
+        res = format_xml(o)
+        response = ET.fromstring(res)
+        self.assertEqual(response.tag, 'TwilioResponse')
+        [root] = list(response)
+        self.assertEqual(root.tag, "Test")
         [barfoo, foo] = sorted(root, key=lambda c: c.tag)
         self.assertEqual(foo.tag, 'foo')
         self.assertEqual(barfoo.tag, 'barfoo')
@@ -543,18 +553,19 @@ class TestServerFormatting(TestCase):
 
     def test_format_json(self):
         format_json = TwilioAPIServer.format_json
-        d = {
-            'Root': {
-                'Foo': {
+
+        class Test(object):
+            def __init__(self):
+                self.Foo = {
                     'Bar': {
                         'Baz': 'Qux',
                     },
                     'FooBar': 'BazQux',
-                },
-                'BarFoo': 'QuxBaz',
-            }
-        }
-        res = format_json(d)
+                }
+                self.BarFoo = 'QuxBaz'
+        o = Test()
+
+        res = format_json(o)
         root = json.loads(res)
         expected = {
             'foo': {
