@@ -51,10 +51,10 @@ class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
     riak_manager = ConfigRiak("Riak config.", required=True, static=True)
     client_path = ConfigText(
         "The web path that the API worker should send requests to",
-        required=True, static=True)
+        required=True)
     client_method = ConfigText(
         "The HTTP method that the API worker uses when sending requests",
-        default='POST', static=True)
+        default='POST')
     status_callback_path = ConfigText(
         "The web path that the API sends a request to when the call ends",
         default=None)
@@ -70,14 +70,14 @@ class TwilioAPIWorker(ApplicationWorker):
     @inlineCallbacks
     def setup_application(self):
         """Application specific setup"""
-        self.config = self.get_static_config()
-        self.server = TwilioAPIServer(self, self.config.api_version)
-        path = os.path.join(self.config.web_path, self.config.api_version)
+        self.app_config = self.get_static_config()
+        self.server = TwilioAPIServer(self, self.app_config.api_version)
+        path = os.path.join(self.app_config.web_path, self.app_config.api_version)
         self.webserver = self.start_web_resources([
             (self.server.app.resource(), path)],
-            self.config.web_port)
-        redis = yield TxRedisManager.from_config(self.config.redis_manager)
-        riak = yield TxRiakManager.from_config(self.config.riak_manager)
+            self.app_config.web_port)
+        redis = yield TxRedisManager.from_config(self.app_config.redis_manager)
+        riak = yield TxRiakManager.from_config(self.app_config.riak_manager)
         self.session_manager = SessionManager(redis)
         self.message_store = MessageStore(riak, redis)
         self.twiml_parser = TwiMLParser()
@@ -98,7 +98,7 @@ class TwilioAPIWorker(ApplicationWorker):
             'From': session['From'],
             'To': session['To'],
             'CallStatus': session['Status'],
-            'ApiVersion': self.config.api_version,
+            'ApiVersion': self.app_config.api_version,
             'Direction': session['Direction'],
         }
 
@@ -150,6 +150,7 @@ class TwilioAPIWorker(ApplicationWorker):
     @inlineCallbacks
     def new_session(self, message):
         yield self.message_store.add_inbound_message(message)
+        config = yield self.get_config(message)
         session = {
             'CallId': self.server._get_sid(),
             'AccountSid': self.server._get_sid(),
@@ -157,10 +158,10 @@ class TwilioAPIWorker(ApplicationWorker):
             'To': message['to_addr'],
             'Status': 'in-progress',
             'Direction': 'inbound',
-            'Url': self.config.client_path,
-            'Method': self.config.client_method,
-            'StatusCallback': self.config.status_callback_path,
-            'StatusCallbackMethod': self.config.status_callback_method,
+            'Url': config.client_path,
+            'Method': config.client_method,
+            'StatusCallback': config.status_callback_path,
+            'StatusCallbackMethod': config.status_callback_method,
         }
         yield self.session_manager.create_session(
             message['from_addr'], **session)

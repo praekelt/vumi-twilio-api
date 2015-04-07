@@ -17,60 +17,15 @@ from vumi.tests.helpers import VumiTestCase
 from vumi.utils import LogFilterSite
 import xml.etree.ElementTree as ET
 
+from .helpers import TwiMLServer
 from vumi_twilio_api.twilio_api import TwilioAPIServer, TwilioAPIWorker, Response
-
-
-class TwiMLServer(object):
-    app = Klein()
-
-    def __init__(self, responses={}):
-        self._responses = responses.copy()
-        self.requests = []
-
-    def add_response(self, filename, response):
-        self._responses[filename] = response
-
-    def add_err(self, filename, err):
-        self._responses[filename] = Exception(err)
-
-    @app.route('/<string:filename>')
-    def get_twiml(self, request, filename):
-        self.requests.append({
-            'filename': filename,
-            'request': request,
-        })
-        response = self._responses[filename]
-        if isinstance(response, Exception):
-            request.setResponseCode(500)
-            return response.message
-        request.setHeader('Content-Type', 'application/xml')
-        return str(self._responses[filename])
-
-    @app.route('/')
-    def get_root(self, request):
-        return self.get_twiml(request, '')
-
-    @inlineCallbacks
-    def start(self):
-        site_factory = LogFilterSite(self.app.resource())
-        self._webserver = yield reactor.listenTCP(
-            0, site_factory, interface='127.0.0.1')
-        self.addr = self._webserver.getHost()
-        self.url = "http://%s:%s/" % (self.addr.host, self.addr.port)
-
-    @inlineCallbacks
-    def stop(self):
-        yield self._webserver.stopListening()
-        yield self._webserver.loseConnection()
 
 
 class TestTwiMLServer(VumiTestCase):
 
     @inlineCallbacks
     def setUp(self):
-        self.twiml_server = TwiMLServer()
-        yield self.twiml_server.start()
-        self.add_cleanup(self.twiml_server.stop)
+        self.twiml_server = yield self.add_helper(TwiMLServer())
         self.url = self.twiml_server.url
 
     def _server_request(self, path='', method='GET', data={}):
@@ -96,9 +51,7 @@ class TestTwilioAPIServer(VumiTestCase):
 
     @inlineCallbacks
     def setUp(self):
-        self.twiml_server = TwiMLServer()
-        yield self.twiml_server.start()
-        self.add_cleanup(self.twiml_server.stop)
+        self.twiml_server = yield self.add_helper(TwiMLServer())
 
         self.app_helper = self.add_helper(ApplicationHelper(
             TwilioAPIWorker, use_riak=True, transport_type='voice'))
