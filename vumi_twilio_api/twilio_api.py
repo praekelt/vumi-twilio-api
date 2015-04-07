@@ -57,10 +57,10 @@ class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
         default='POST', static=True)
     status_callback_path = ConfigText(
         "The web path that the API sends a request to when the call ends",
-        default=None, static=True)
+        default=None)
     status_callback_method = ConfigText(
         "The HTTP method to use when sending the callback status",
-        default='POST', static=True)
+        default='POST')
 
 
 class TwilioAPIWorker(ApplicationWorker):
