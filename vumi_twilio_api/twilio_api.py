@@ -8,7 +8,6 @@ import treq
 from twisted.internet.defer import inlineCallbacks, returnValue
 import uuid
 from vumi.application import ApplicationWorker
-from vumi.components.message_store import MessageStore
 from vumi.components.session import SessionManager
 from vumi.config import ConfigDict, ConfigInt, ConfigRiak, ConfigText
 from vumi.message import TransportUserMessage
@@ -36,6 +35,26 @@ def convert_dict_keys(dct):
     return res
 
 
+class SessionIDLookup(object):
+    def __init__(self, redis_manager, expiry_time, namespace):
+        self._redis_manager = redis_manager
+        self._namespace = namespace
+        self._expiry_time = expiry_time
+
+    def _get_key(self, message_id):
+        return "%s:%s" % (self._namespace, message_id)
+
+    def set_id(self, message_id, address):
+        return self._redis_manager.setex(
+            self._get_key(message_id), self._expiry_time, address)
+
+    def get_address(self, message_id):
+        return self._redis_manager.get(self._get_key(message_id))
+
+    def delete_id(self, message_id):
+        return self._redis_manager.delete(self._get_key(message_id))
+
+
 class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
     """Config for the Twilio API worker"""
     web_path = ConfigText(
@@ -48,7 +67,12 @@ class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
         "The version of the API, used in the api URL",
         default="2010-04-01", static=True)
     redis_manager = ConfigDict("Redis config.", required=True, static=True)
-    riak_manager = ConfigRiak("Riak config.", required=True, static=True)
+    redis_timeout = ConfigInt(
+        "Expiry time in seconds for redis keys",
+        default=3600, static=True)
+    session_lookup_namespace = ConfigText(
+        "The redis namespace to use for storing session ID lookups",
+        default="session_id", static=True)
     client_path = ConfigText(
         "The web path that the API worker should send requests to",
         required=True)
@@ -77,10 +101,12 @@ class TwilioAPIWorker(ApplicationWorker):
             (self.server.app.resource(), path)],
             self.app_config.web_port)
         redis = yield TxRedisManager.from_config(self.app_config.redis_manager)
-        riak = yield TxRiakManager.from_config(self.app_config.riak_manager)
-        self.session_manager = SessionManager(redis)
-        self.message_store = MessageStore(riak, redis)
+        self.session_manager = SessionManager(
+            redis, self.app_config.redis_timeout)
         self.twiml_parser = TwiMLParser()
+        self.session_lookup = SessionIDLookup(
+            redis, self.app_config.redis_timeout,
+            self.app_config.session_lookup_namespace)
 
     @inlineCallbacks
     def teardown_application(self):
@@ -131,25 +157,28 @@ class TwilioAPIWorker(ApplicationWorker):
     @inlineCallbacks
     def consume_ack(self, event):
         message_id = event['user_message_id']
-        message = yield self.message_store.get_outbound_message(message_id)
-        session = yield self.session_manager.load_session(message['to_addr'])
+        session_id = yield self.session_lookup.get_address(message_id)
+        yield self.session_lookup.delete_id(message_id)
+        session = yield self.session_manager.load_session(session_id)
 
         if session['Status'] == 'queued':
-            yield self._handle_connected_call(message['to_addr'], session)
+            yield self._handle_connected_call(session_id, session)
 
     @inlineCallbacks
     def consume_nack(self, event):
         message_id = event['user_message_id']
-        message = yield self.message_store.get_outbound_message(message_id)
-        session = yield self.session_manager.load_session(message['to_addr'])
+        session_id = yield self.session_lookup.get_address(message_id)
+        yield self.session_lookup.delete_id(message_id)
+        session = yield self.session_manager.load_session(session_id)
 
         if session['Status'] == 'queued':
             yield self._handle_connected_call(
-                message['to_addr'], session, status='failed')
+                session_id, session, status='failed')
 
     @inlineCallbacks
     def new_session(self, message):
-        yield self.message_store.add_inbound_message(message)
+        yield self.session_lookup.set_id(
+            message['message_id'], message['from_addr'])
         config = yield self.get_config(message)
         session = {
             'CallId': self.server._get_sid(),
@@ -174,7 +203,6 @@ class TwilioAPIWorker(ApplicationWorker):
     def close_session(self, message):
         # TODO: Implement call duration parameters
         # TODO: Implement recording parameters
-        yield self.message_store.add_inbound_message(message)
         session = yield self.session_manager.load_session(message['from_addr'])
         yield self.session_manager.clear_session(message['from_addr'])
         url = session.get('StatusCallback')
@@ -315,7 +343,7 @@ class TwilioAPIServer(object):
             to_addr_type=TransportUserMessage.AT_MSISDN,
             from_addr_type=TransportUserMessage.AT_MSISDN
         )
-        yield self.vumi_worker.message_store.add_outbound_message(message)
+        yield self.vumi_worker.session_lookup.set_id(message['message_id'], message['to_addr'])
         yield self.vumi_worker.session_manager.create_session(
             message['to_addr'], **fields)
         returnValue(self._format_response(request, Call(
