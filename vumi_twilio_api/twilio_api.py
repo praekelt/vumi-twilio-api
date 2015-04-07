@@ -192,44 +192,16 @@ class TwilioAPIUsageException(Exception):
         super(TwilioAPIUsageException, self).__init__(message)
         self.format_ = format_
 
+class Response(object):
+    """Base Response object used for HTTP responses"""
+    name = 'Response'
 
-class Error(object):
-    """Error HTTP response object, returned for incorred API queries"""
-    def __init__(self, error_type, error_message):
-        self.error_type = error_type
-        self.error_message = error_message
+    def __init__(self, **kw):
+        self._data = kw
 
-    @classmethod
-    def from_exception(cls, exception):
-        return cls(exception.__class__.__name__, exception.message)
-
-
-class Version(object):
-    """Version HTTP response object, returned for root resource"""
-    def __init__(self, name, uri, **kwargs):
-        self.Name = name
-        self.Uri = uri
-        self.SubresourceUris = kwargs
-
-
-class Call(object):
-    """Call HTTP response object, returned for the Calls resource"""
-    def __init__(self, **kwargs):
-        for key, value in kwargs.iteritems():
-            setattr(self, key, value)
-
-
-class TwilioAPIServer(object):
-    app = Klein()
-
-    def __init__(self, vumi_worker, version):
-        self.vumi_worker = vumi_worker
-        self.version = version
-
-    @staticmethod
-    def format_xml(obj):
+    def format_xml(self):
         response = ET.Element("TwilioResponse")
-        root = ET.SubElement(response, obj.__class__.__name__)
+        root = ET.SubElement(response, self.name)
 
         def format_xml_rec(dct, root):
             for key, value in dct.iteritems():
@@ -241,22 +213,59 @@ class TwilioAPIServer(object):
                     sub.text = value
             return root
 
-        format_xml_rec(obj.__dict__, root)
+        format_xml_rec(self._data, root)
         return ET.tostring(response)
 
-    @staticmethod
-    def format_json(obj):
-        return json.dumps(convert_dict_keys(obj.__dict__))
+    def format_json(self):
+        return json.dumps(convert_dict_keys(self._data))
 
-    def _format_response(self, request, dct, format_):
+
+class Error(Response):
+    """Error HTTP response object, returned for incorred API queries"""
+    name = 'Error'
+    def __init__(self, error_type, error_message):
+        self._data = {
+            'error_type': error_type,
+            'error_message': error_message,
+        }
+
+    @classmethod
+    def from_exception(cls, exception):
+        return cls(exception.__class__.__name__, exception.message)
+
+
+class Version(Response):
+    """Version HTTP response object, returned for root resource"""
+    name = 'Version'
+    def __init__(self, name, uri, **kwargs):
+        self._data = {
+            'Name': name,
+            'Uri': uri,
+            'SubresourceUris': kwargs,
+        }
+
+
+class Call(Response):
+    """Call HTTP response object, returned for the Calls resource"""
+    name = 'Call'
+
+
+class TwilioAPIServer(object):
+    app = Klein()
+
+    def __init__(self, vumi_worker, version):
+        self.vumi_worker = vumi_worker
+        self.version = version
+
+    def _format_response(self, request, response, format_):
         format_ = str(format_.lstrip('.').lower()) or 'xml'
         func = getattr(
-            TwilioAPIServer, 'format_' + format_, None)
+            response, 'format_' + format_, None)
         if not func:
             raise TwilioAPIUsageException(
                 '%r is not a valid request format' % format_)
         request.setHeader('Content-Type', 'application/%s' % format_)
-        return func(dct)
+        return func()
 
     @app.handle_errors(TwilioAPIUsageException)
     def usage_exception(self, request, failure):

@@ -17,7 +17,7 @@ from vumi.tests.helpers import VumiTestCase
 from vumi.utils import LogFilterSite
 import xml.etree.ElementTree as ET
 
-from vumi_twilio_api.twilio_api import TwilioAPIServer, TwilioAPIWorker
+from vumi_twilio_api.twilio_api import TwilioAPIServer, TwilioAPIWorker, Response
 
 
 class TwiMLServer(object):
@@ -521,24 +521,21 @@ class TestTwilioAPIServer(VumiTestCase):
 class TestServerFormatting(TestCase):
 
     def test_format_xml(self):
-        format_xml = TwilioAPIServer.format_xml
+        o = Response(
+            foo={
+                'bar': {
+                    'baz': 'qux',
+                },
+                'foobar': 'bazqux',
+            },
+            barfoo='quxbaz',
+        )
 
-        class Test(object):
-            def __init__(self):
-                self.foo = {
-                    'bar': {
-                        'baz': 'qux',
-                    },
-                    'foobar': 'bazqux',
-                }
-                self.barfoo = 'quxbaz'
-        o = Test()
-
-        res = format_xml(o)
+        res = o.format_xml()
         response = ET.fromstring(res)
         self.assertEqual(response.tag, 'TwilioResponse')
         [root] = list(response)
-        self.assertEqual(root.tag, "Test")
+        self.assertEqual(root.tag, "Response")
         [barfoo, foo] = sorted(root, key=lambda c: c.tag)
         self.assertEqual(foo.tag, 'foo')
         self.assertEqual(barfoo.tag, 'barfoo')
@@ -552,20 +549,17 @@ class TestServerFormatting(TestCase):
         self.assertEqual(baz.text, 'qux')
 
     def test_format_json(self):
-        format_json = TwilioAPIServer.format_json
+        o = Response(
+            Foo={
+                'Bar': {
+                    'Baz': 'Qux',
+                },
+                'FooBar': 'BazQux',
+            },
+            BarFoo='QuxBaz',
+        )
 
-        class Test(object):
-            def __init__(self):
-                self.Foo = {
-                    'Bar': {
-                        'Baz': 'Qux',
-                    },
-                    'FooBar': 'BazQux',
-                }
-                self.BarFoo = 'QuxBaz'
-        o = Test()
-
-        res = format_json(o)
+        res = o.format_json()
         root = json.loads(res)
         expected = {
             'foo': {
