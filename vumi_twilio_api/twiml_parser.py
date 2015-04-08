@@ -63,3 +63,6 @@ class TwiMLParser(object):
 
     def _parse_default(self, element):
         raise TwiMLParseError("Cannot find parser for verb %r" % element.tag)
+
+    def _parse_play(self, element):
+        return Play.from_xml(element)

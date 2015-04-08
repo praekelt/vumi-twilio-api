@@ -45,6 +45,16 @@ class TestParser(TestCase):
         [result] = self.parser.parse(str(self.response))
         self.assertEqual(result, "dummy_parser")
 
+    def test_parse_play(self):
+        self.response.play('test_url', loop=2, digits='123w')
+
+        [result] = self.parser.parse(str(self.response))
+
+        self.assertEqual(result.name, "Play")
+        self.assertEqual(result.nouns, ["test_url"])
+        self.assertEqual(result.attributes['loop'], 2)
+        self.assertEqual(result.attributes['digits'], '123w')
+
 class TestPlay(TestCase):
     def test_play_from_xml_defaults(self):
         """Defaults set according to API documentation"""
