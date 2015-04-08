@@ -46,6 +46,7 @@ class TestParser(TestCase):
         self.assertEqual(result, "dummy_parser")
 
     def test_parse_play(self):
+        """The play verb is correctly parsed and returned"""
         self.response.play('test_url', loop=2, digits='123w')
 
         [result] = self.parser.parse(str(self.response))
@@ -94,5 +95,5 @@ class TestPlay(TestCase):
 
         e = self.assertRaises(TwiMLParseError, Play.from_xml, root)
         self.assertEqual(
-            str(e), "Invalid value '123wa123' for 'digits' attribute in Play"
+            str(e), "Invalid value '123wa123' for 'digits' attribute in Play "
             "verb. Must be one of '0123456789w'")
