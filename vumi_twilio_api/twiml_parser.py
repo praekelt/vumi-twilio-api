@@ -10,6 +10,7 @@ class Verb(object):
         self.attributes = attributes
         self.nouns = nouns
 
+
 class Play(Verb):
     """Represents the Play verb"""
     name = "Play"
@@ -26,7 +27,7 @@ class Play(Verb):
         except ValueError:
             raise TwiMLParseError(
                 "Invalid value %r for 'loop' attribute in Play verb. "
-                "Must be an integer."  % loop)
+                "Must be an integer." % loop)
 
         digits = xml.attrib.get('digits')
         if not all(cls.digits_re.match(c) for c in (digits or '')):

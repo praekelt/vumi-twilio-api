@@ -55,6 +55,7 @@ class TestParser(TestCase):
         self.assertEqual(result.attributes['loop'], 2)
         self.assertEqual(result.attributes['digits'], '123w')
 
+
 class TestPlay(TestCase):
     def test_play_from_xml_defaults(self):
         """Defaults set according to API documentation"""
@@ -93,5 +94,5 @@ class TestPlay(TestCase):
 
         e = self.assertRaises(TwiMLParseError, Play.from_xml, root)
         self.assertEqual(
-            str(e), "Invalid value '123wa123' for 'digits' attribute in Play verb. "
-            "Must be one of '0123456789w'")
+            str(e), "Invalid value '123wa123' for 'digits' attribute in Play"
+            "verb. Must be one of '0123456789w'")

@@ -1,24 +1,21 @@
 from datetime import datetime
 import json
-from klein import Klein
 from mock import Mock
 import re
 import treq
 from twilio import twiml
 from twilio.rest import TwilioRestClient
 from twilio.rest.exceptions import TwilioRestException
-from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.threads import deferToThread
 from twisted.trial.unittest import TestCase
 from vumi.application.tests.helpers import ApplicationHelper
 from vumi.message import TransportUserMessage
 from vumi.tests.helpers import VumiTestCase
-from vumi.utils import LogFilterSite
 import xml.etree.ElementTree as ET
 
 from .helpers import TwiMLServer
-from vumi_twilio_api.twilio_api import TwilioAPIServer, TwilioAPIWorker, Response
+from vumi_twilio_api.twilio_api import TwilioAPIWorker, Response
 
 
 class TestTwiMLServer(VumiTestCase):
