@@ -2,16 +2,17 @@ from twisted.trial.unittest import TestCase
 from twilio import twiml
 import xml.etree.ElementTree as ET
 
-from vumi_twilio_api.twiml_parser import TwiMLParser, TwiMLParseError, Verb
+from vumi_twilio_api.twiml_parser import (
+    TwiMLParser, TwiMLParseError, Verb, Play)
 
 
 class TestVerb(TestCase):
     def test_verb_defaults(self):
         """Defaults are set correctly when no args are given"""
-        verb = Verb("Say")
-        self.assertEqual(verb.verb, "Say")
+        verb = Verb()
+        self.assertEqual(verb.name, "Verb")
         self.assertEqual(verb.attributes, {})
-        self.assertEqual(verb.nouns, {})
+        self.assertEqual(verb.nouns, [])
 
 
 class TestParser(TestCase):
@@ -39,7 +40,48 @@ class TestParser(TestCase):
         """The correct parse function is called when parsing"""
         def dummy_parser(element):
             return "dummy_parser"
-        self.parser._parse_Say = dummy_parser
+        self.parser._parse_say = dummy_parser
         self.response.say("Foobar")
         [result] = self.parser.parse(str(self.response))
         self.assertEqual(result, "dummy_parser")
+
+class TestPlay(TestCase):
+    def test_play_from_xml_defaults(self):
+        """Defaults set according to API documentation"""
+        root = ET.Element("Play")
+        root.text = ''
+        play = Play.from_xml(root)
+
+        self.assertEqual(play.name, "Play")
+        self.assertEqual(play.attributes['loop'], 1)
+        self.assertEqual(play.attributes['digits'], None)
+        self.assertEqual(play.nouns, [''])
+
+    def test_play_from_xml_non_defaults(self):
+        """Values are set according to what is specified in the XML"""
+        root = ET.Element("Play", {'loop': '2', 'digits': '1234567890w'})
+        root.text = 'url'
+        play = Play.from_xml(root)
+
+        self.assertEqual(play.name, "Play")
+        self.assertEqual(play.attributes['loop'], 2)
+        self.assertEqual(play.attributes['digits'], '1234567890w')
+        self.assertEqual(play.nouns, ['url'])
+
+    def test_play_from_xml_loop_non_int(self):
+        """Error should be raised when loop attribute is not an integer"""
+        root = ET.Element("Play", {'loop': 'a'})
+
+        e = self.assertRaises(TwiMLParseError, Play.from_xml, root)
+        self.assertEqual(
+            str(e), "Invalid value 'a' for 'loop' attribute in Play verb. "
+            "Must be an integer.")
+
+    def test_play_from_xml_invalid_digits(self):
+        """Error should be raised for digits attribute values not 0-9 and w"""
+        root = ET.Element("Play", {'digits': '123wa123'})
+
+        e = self.assertRaises(TwiMLParseError, Play.from_xml, root)
+        self.assertEqual(
+            str(e), "Invalid value '123wa123' for 'digits' attribute in Play verb. "
+            "Must be one of '0123456789w'")
