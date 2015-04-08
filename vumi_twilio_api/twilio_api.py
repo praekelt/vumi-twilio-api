@@ -9,10 +9,9 @@ from twisted.internet.defer import inlineCallbacks, returnValue
 import uuid
 from vumi.application import ApplicationWorker
 from vumi.components.session import SessionManager
-from vumi.config import ConfigDict, ConfigInt, ConfigRiak, ConfigText
+from vumi.config import ConfigDict, ConfigInt, ConfigText
 from vumi.message import TransportUserMessage
 from vumi.persist.txredis_manager import TxRedisManager
-from vumi.persist.txriak_manager import TxRiakManager
 import xml.etree.ElementTree as ET
 
 from vumi_twilio_api.twiml_parser import TwiMLParser
@@ -96,7 +95,8 @@ class TwilioAPIWorker(ApplicationWorker):
         """Application specific setup"""
         self.app_config = self.get_static_config()
         self.server = TwilioAPIServer(self, self.app_config.api_version)
-        path = os.path.join(self.app_config.web_path, self.app_config.api_version)
+        path = os.path.join(
+            self.app_config.web_path, self.app_config.api_version)
         self.webserver = self.start_web_resources([
             (self.server.app.resource(), path)],
             self.app_config.web_port)
@@ -221,6 +221,7 @@ class TwilioAPIUsageException(Exception):
         super(TwilioAPIUsageException, self).__init__(message)
         self.format_ = format_
 
+
 class Response(object):
     """Base Response object used for HTTP responses"""
     name = 'Response'
@@ -252,6 +253,7 @@ class Response(object):
 class Error(Response):
     """Error HTTP response object, returned for incorred API queries"""
     name = 'Error'
+
     def __init__(self, error_type, error_message):
         self._data = {
             'error_type': error_type,
@@ -266,6 +268,7 @@ class Error(Response):
 class Version(Response):
     """Version HTTP response object, returned for root resource"""
     name = 'Version'
+
     def __init__(self, name, uri, **kwargs):
         self._data = {
             'Name': name,
@@ -343,7 +346,8 @@ class TwilioAPIServer(object):
             to_addr_type=TransportUserMessage.AT_MSISDN,
             from_addr_type=TransportUserMessage.AT_MSISDN
         )
-        yield self.vumi_worker.session_lookup.set_id(message['message_id'], message['to_addr'])
+        yield self.vumi_worker.session_lookup.set_id(
+            message['message_id'], message['to_addr'])
         yield self.vumi_worker.session_manager.create_session(
             message['to_addr'], **fields)
         returnValue(self._format_response(request, Call(
