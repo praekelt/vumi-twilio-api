@@ -149,10 +149,25 @@ class TwilioAPIWorker(ApplicationWorker):
         self.session_manager.save_session(session_id, session)
         twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
-            self._handle_twiml_verb(verb)
+            yield self._handle_twiml_verb(verb, session)
 
-    def _handle_twiml_verb(self, verb):
-        pass
+    @inlineCallbacks
+    def _handle_twiml_verb(self, verb, session):
+        if not verb:
+            return
+
+        if verb.name == "Play":
+            yield self.send_to(
+                session['To'], '',
+                from_addr=session['From'],
+                session_event=None,
+                to_addr_type=TransportUserMessage.AT_MSISDN,
+                from_addr_type=TransportUserMessage.AT_MSISDN,
+                helper_metadata={
+                    'voice': {
+                        'url': verb.nouns[0],
+                    }
+                })
 
     @inlineCallbacks
     def consume_ack(self, event):
@@ -176,6 +191,18 @@ class TwilioAPIWorker(ApplicationWorker):
                 session_id, session, status='failed')
 
     @inlineCallbacks
+    def _handle_twiml_verb_reply(self, verb, message):
+        if not verb:
+            return
+
+        if verb.name == "Play":
+            yield self.reply_to(message, '', helper_metadata={
+                'voice': {
+                    'url': verb.nouns[0]
+                }
+            })
+
+    @inlineCallbacks
     def new_session(self, message):
         yield self.session_lookup.set_id(
             message['message_id'], message['from_addr'])
@@ -197,7 +224,7 @@ class TwilioAPIWorker(ApplicationWorker):
 
         twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
-            self._handle_twiml_verb(verb)
+            yield self._handle_twiml_verb_reply(verb, message)
 
     @inlineCallbacks
     def close_session(self, message):
