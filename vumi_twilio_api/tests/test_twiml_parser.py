@@ -3,7 +3,7 @@ from twilio import twiml
 import xml.etree.ElementTree as ET
 
 from vumi_twilio_api.twiml_parser import (
-    TwiMLParser, TwiMLParseError, Verb, Play)
+    TwiMLParser, TwiMLParseError, Verb, Play, Hangup)
 
 
 class TestVerb(TestCase):
@@ -56,6 +56,15 @@ class TestParser(TestCase):
         self.assertEqual(result.attributes['loop'], 2)
         self.assertEqual(result.attributes['digits'], '123w')
 
+    def test_parse_hangup(self):
+        """The hangup verb is correctly parsed and returned"""
+        self.response.hangup()
+        [result] = self.parser.parse(str(self.response))
+
+        self.assertEqual(result.name, "Hangup")
+        self.assertEqual(result.nouns, [])
+        self.assertEqual(result.attributes, {})
+
 
 class TestPlay(TestCase):
     def test_play_from_xml_defaults(self):
@@ -97,3 +106,12 @@ class TestPlay(TestCase):
         self.assertEqual(
             str(e), "Invalid value '123wa123' for 'digits' attribute in Play "
             "verb. Must be one of '0123456789w'")
+
+class TestHangup(TestCase):
+    def test_hangup_from_xml(self):
+        """There are no attributes or nouns for the hangup verb"""
+        root = ET.Element("Hangup")
+        hangup = Hangup.from_xml(root)
+        self.assertEqual(hangup.name, "Hangup")
+        self.assertEqual(hangup.nouns, [])
+        self.assertEqual(hangup.attributes, {})
