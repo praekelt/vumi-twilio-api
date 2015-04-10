@@ -378,26 +378,6 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(req['request'].args['CallStatus'], ['failed'])
 
     @inlineCallbacks
-    def test_make_call_parsing_twiml(self):
-        response = twiml.Response()
-        response.say('foobar')
-        self.twiml_server.add_response('default.xml', response)
-
-        twimls = []
-
-        def parse_say(twiml):
-            twimls.append(twiml)
-        self.worker.twiml_parser._parse_say = parse_say
-
-        yield self._twilio_client_create_call(
-            'default.xml', from_='+12345', to='+54321')
-        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
-        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
-        [command] = twimls
-        self.assertEqual(command.tag, 'Say')
-        self.assertEqual(command.text, 'foobar')
-
-    @inlineCallbacks
     def test_make_call_parsing_play_verb(self):
         response = twiml.Response()
         response.play('test_url')
@@ -439,26 +419,6 @@ class TestTwilioAPIServer(VumiTestCase):
         [req] = self.twiml_server.requests
         self.assertEqual(req['filename'], '')
         self.assertEqual(req['request'].args['Direction'], ['inbound'])
-
-    @inlineCallbacks
-    def test_receive_call_parsing_twiml(self):
-        response = twiml.Response()
-        response.say('foobar')
-        self.twiml_server.add_response('', response)
-
-        twimls = []
-
-        def parse_say(twiml):
-            twimls.append(twiml)
-        self.worker.twiml_parser._parse_say = parse_say
-
-        msg = self.app_helper.make_inbound(
-            '', from_addr='+54321', to_addr='+12345',
-            session_event=TransportUserMessage.SESSION_NEW)
-        yield self.app_helper.dispatch_inbound(msg)
-        [verb] = twimls
-        self.assertEqual(verb.tag, 'Say')
-        self.assertEqual(verb.text, 'foobar')
 
     @inlineCallbacks
     def test_receive_call_parsing_play_verb(self):

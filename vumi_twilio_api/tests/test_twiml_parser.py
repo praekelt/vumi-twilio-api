@@ -17,7 +17,7 @@ class TestVerb(TestCase):
 
 class TestParser(TestCase):
     def setUp(self):
-        self.parser = TwiMLParser()
+        self.parser = TwiMLParser('test_url')
         self.response = twiml.Response()
 
     def test_invalid_root(self):
@@ -64,6 +64,16 @@ class TestParser(TestCase):
         self.assertEqual(result.name, "Hangup")
         self.assertEqual(result.nouns, [])
         self.assertEqual(result.attributes, {})
+
+    def test_parse_gather(self):
+        """The gather verb is correctly parsed and returned"""
+        with self.response.gather() as g:
+            g.play('play_url')
+        [result] = self.parser.parse(str(self.response))
+
+        self.assertEqual(result.name, 'Gather')
+        self.assertEqual(result.attributes['finishOnKey'], '#')
+        self.assertEqual(result.nouns[0].name, 'Play')
 
 
 class TestPlay(TestCase):
