@@ -385,9 +385,9 @@ class TestTwilioAPIServer(VumiTestCase):
 
         twimls = []
 
-        def parse_Say(twiml):
+        def parse_say(twiml):
             twimls.append(twiml)
-        self.worker.twiml_parser._parse_say = parse_Say
+        self.worker.twiml_parser._parse_say = parse_say
 
         yield self._twilio_client_create_call(
             'default.xml', from_='+12345', to='+54321')
