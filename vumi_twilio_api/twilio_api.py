@@ -149,25 +149,24 @@ class TwilioAPIWorker(ApplicationWorker):
         self.session_manager.save_session(session_id, session)
         twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
-            yield self._handle_twiml_verb(verb, session)
+            if not verb:
+                continue
 
-    @inlineCallbacks
-    def _handle_twiml_verb(self, verb, session):
-        if not verb:
-            return
+            if verb.name == "Play":
+                yield self._send_message(verb.nouns[0], session)
 
-        if verb.name == "Play":
-            yield self.send_to(
-                session['To'], '',
-                from_addr=session['From'],
-                session_event=None,
-                to_addr_type=TransportUserMessage.AT_MSISDN,
-                from_addr_type=TransportUserMessage.AT_MSISDN,
-                helper_metadata={
-                    'voice': {
-                        'url': verb.nouns[0],
-                    }
-                })
+    def _send_message(self, url, session):
+        return self.send_to(
+            session['To'], '',
+            from_addr=session['From'],
+            session_event=None,
+            to_addr_type=TransportUserMessage.AT_MSISDN,
+            from_addr_type=TransportUserMessage.AT_MSISDN,
+            helper_metadata={
+                'voice': {
+                    'url': url,
+                }
+            })
 
     @inlineCallbacks
     def consume_ack(self, event):
@@ -190,15 +189,10 @@ class TwilioAPIWorker(ApplicationWorker):
             yield self._handle_connected_call(
                 session_id, session, status='failed')
 
-    @inlineCallbacks
-    def _handle_twiml_verb_reply(self, verb, message):
-        if not verb:
-            return
-
-        if verb.name == "Play":
-            yield self.reply_to(message, '', helper_metadata={
-                'voice': {
-                    'url': verb.nouns[0]
+    def _reply_to_message(self, message, url):
+        return self.reply_to(message, '', helper_metadata={
+            'voice': {
+                'url': url,
                 }
             })
 
@@ -224,7 +218,11 @@ class TwilioAPIWorker(ApplicationWorker):
 
         twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
-            yield self._handle_twiml_verb_reply(verb, message)
+            if not verb:
+                continue
+
+            if verb.name == "Play":
+                yield self._reply_to_message(message, verb.nouns[0])
 
     @inlineCallbacks
     def close_session(self, message):
