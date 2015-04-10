@@ -255,10 +255,8 @@ class Error(Response):
     name = 'Error'
 
     def __init__(self, error_type, error_message):
-        self._data = {
-            'error_type': error_type,
-            'error_message': error_message,
-        }
+        super(Error, self).__init__(
+            error_type=error_type, error_message=error_message)
 
     @classmethod
     def from_exception(cls, exception):
@@ -270,11 +268,8 @@ class Version(Response):
     name = 'Version'
 
     def __init__(self, name, uri, **kwargs):
-        self._data = {
-            'Name': name,
-            'Uri': uri,
-            'SubresourceUris': kwargs,
-        }
+        super(Version, self).__init__(
+            Name=name, Uri=uri, SubresourceUris=kwargs)
 
 
 class Call(Response):
