@@ -106,7 +106,7 @@ class Gather(Verb):
                     "Invalid value %r for numDigits parameter. Must be >=1"
                     % numDigits)
 
-        data = TwiMLParser.from_list(xml)
+        data = TwiMLParser.from_list(xml, url)
         valid_verbs = ['Say', 'Play']
         for verb in data:
             if verb.name not in valid_verbs:
@@ -129,6 +129,8 @@ class TwiMLParseError(Exception):
 
 class TwiMLParser(object):
     """Parser for TwiML"""
+    def __init__(self, url):
+        self.url = url
 
     def parse(self, xml):
         """Parses TwiML and returns a list of :class:`Verb` objects"""
@@ -144,8 +146,8 @@ class TwiMLParser(object):
         return verbs
 
     @classmethod
-    def from_list(cls, lst):
-        self = cls()
+    def from_list(cls, lst, url):
+        self = cls(url)
         verbs = []
         for child in lst:
             parser = getattr(
@@ -161,3 +163,6 @@ class TwiMLParser(object):
 
     def _parse_hangup(self, element):
         return Hangup.from_xml(element)
+
+    def _parse_gather(self, element):
+        return Gather.from_xml(element, self.url)

@@ -103,7 +103,6 @@ class TwilioAPIWorker(ApplicationWorker):
         redis = yield TxRedisManager.from_config(self.app_config.redis_manager)
         self.session_manager = SessionManager(
             redis, self.app_config.redis_timeout)
-        self.twiml_parser = TwiMLParser()
         self.session_lookup = SessionIDLookup(
             redis, self.app_config.redis_timeout,
             self.app_config.session_lookup_namespace)
@@ -137,7 +136,8 @@ class TwilioAPIWorker(ApplicationWorker):
             twiml_raw = yield self._http_request(
                 session['FallbackUrl'], session['FallbackMethod'], data)
         twiml_raw = yield twiml_raw.content()
-        returnValue(self.twiml_parser.parse(twiml_raw))
+        twiml_parser = TwiMLParser(session['Url'])
+        returnValue(twiml_parser.parse(twiml_raw))
 
     @inlineCallbacks
     def _handle_connected_call(
