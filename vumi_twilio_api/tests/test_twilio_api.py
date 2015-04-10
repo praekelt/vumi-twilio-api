@@ -1,100 +1,96 @@
 from datetime import datetime
 import json
-from klein import Klein
 from mock import Mock
 import re
 import treq
+from twilio import twiml
 from twilio.rest import TwilioRestClient
 from twilio.rest.exceptions import TwilioRestException
 from twisted.internet.defer import inlineCallbacks
 from twisted.internet.threads import deferToThread
 from twisted.trial.unittest import TestCase
 from vumi.application.tests.helpers import ApplicationHelper
+from vumi.message import TransportUserMessage
 from vumi.tests.helpers import VumiTestCase
 import xml.etree.ElementTree as ET
 
-from vumi_twilio_api.twilio_api import TwilioAPIServer, TwilioAPIWorker
-
-
-class TwiMLServer(object):
-    app = Klein()
-
-    def __init__(self, responses={}):
-        self._responses = responses.copy()
-
-    def add_response(self, filename, response):
-        self._responses[filename] = response
-
-    @app.route('/<string:filename>')
-    def get_twiml(self, request, filename):
-        request.setHeader('Content-Type', 'application/xml')
-        return ET.tostring(self._responses[filename])
+from .helpers import TwiMLServer
+from vumi_twilio_api.twilio_api import TwilioAPIWorker, Response
 
 
 class TestTwiMLServer(VumiTestCase):
 
     @inlineCallbacks
     def setUp(self):
-        self.app_helper = self.add_helper(ApplicationHelper(
-            TwilioAPIWorker, transport_type='voice'))
-        self.worker = yield self.app_helper.get_application({
-            'web_path': '/api',
-            'web_port': 8080,
-            'api_version': 'v1',
-        })
-
-        self.twiml_server = TwiMLServer()
-        self.twiml_connection = self.worker.start_web_resources([
-            (self.twiml_server.app.resource(), '/twiml')], 8081)
-        self.add_cleanup(self.twiml_connection.loseConnection)
-        addr = self.twiml_connection.getHost()
-        self.url = 'http://%s:%s' % (addr.host, addr.port)
+        self.twiml_server = yield self.add_helper(TwiMLServer())
+        self.url = self.twiml_server.url
 
     def _server_request(self, path='', method='GET', data={}):
-        url = '%s/twiml/%s' % (self.url, path)
+        url = '%s/%s' % (self.url, path)
         return treq.request(method, url, persistent=False, data=data)
 
     @inlineCallbacks
     def test_getting_response(self):
-        response = ET.Element('Foo')
-        bar = ET.SubElement(response, 'Bar')
+        response = twiml.Response()
+        response.say("Hello")
         self.twiml_server.add_response('example.xml', response)
 
         request = yield self._server_request('example.xml')
         request = yield request.content()
         root = ET.fromstring(request)
-        self.assertEqual(root.tag, response.tag)
+        self.assertEqual(root.tag, 'Response')
         [child] = list(root)
-        self.assertEqual(child.tag, bar.tag)
+        self.assertEqual(child.tag, 'Say')
+        self.assertEqual(child.text, 'Hello')
 
 
 class TestTwilioAPIServer(VumiTestCase):
 
     @inlineCallbacks
     def setUp(self):
+        self.twiml_server = yield self.add_helper(TwiMLServer())
+
         self.app_helper = self.add_helper(ApplicationHelper(
-            TwilioAPIWorker, transport_type='voice'))
+            TwilioAPIWorker, use_riak=True, transport_type='voice'))
         self.worker = yield self.app_helper.get_application({
             'web_path': '/api',
-            'web_port': 8080,
+            'web_port': 0,
             'api_version': 'v1',
+            'client_path': '%s' % self.twiml_server.url,
+            'status_callback_path': '%s/callback.xml' % self.twiml_server.url,
         })
         addr = self.worker.webserver.getHost()
         self.url = 'http://%s:%s%s' % (addr.host, addr.port, '/api')
         self.client = TwilioRestClient(
             'test_account', 'test_token', base=self.url, version='v1')
-        self.twiml_server = TwiMLServer()
-        self.twiml_connection = self.worker.start_web_resources([
-            (self.twiml_server.app.resource(), '/twiml')], 8081)
-        self.add_cleanup(self.twiml_connection.loseConnection)
+        self.patch_resource_request(self.client.calls)
+
+    def patch_resource_request(self, resource):
+        """
+        Patch a TwilioRestClient resource object's request method to force the
+        connection to be closed at the end of the request.
+        """
+        old_request = resource.request
+
+        def request(method, uri, **kwargs):
+            kwargs["headers"] = kwargs.get("headers", {}).copy()
+            kwargs["headers"].setdefault("Connection", "close")
+            return old_request(method, uri, **kwargs)
+
+        self.patch(resource, "request", request)
 
     def _server_request(self, path='', method='GET', data={}):
         url = '%s/v1/%s' % (self.url, path)
         return treq.request(method, url, persistent=False, data=data)
 
     def _twilio_client_create_call(self, filename, *args, **kwargs):
-        addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (addr.host, addr.port, '/twiml/', filename)
+        url = '%s/%s' % (self.twiml_server.url, filename)
+        if kwargs.get('fallback_url'):
+            kwargs['fallback_url'] = '%s/%s' % (
+                self.twiml_server.url, kwargs['fallback_url'])
+        if kwargs.get('status_callback'):
+            kwargs['status_callback'] = '%s/%s' % (
+                self.twiml_server.url, kwargs['status_callback'])
         return deferToThread(
             self.client.calls.create, *args, url=url, **kwargs)
 
@@ -186,7 +182,7 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(
             error_message.text, "'foo' is not a valid request format")
         self.assertEqual(error_type.tag, 'error_type')
-        self.assertEqual(error_type.text, 'UsageError')
+        self.assertEqual(error_type.text, 'TwilioAPIUsageException')
 
     @inlineCallbacks
     def test_make_call_sid(self):
@@ -245,55 +241,46 @@ class TestTwilioAPIServer(VumiTestCase):
 
     @inlineCallbacks
     def test_make_call_required_parameters_to(self):
-        addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (
-            addr.host, addr.port, '/twiml/', 'example.xml')
-
         # Can't use the client here because it requires the required parameters
         yield self.assert_parameter_missing(
             '/Accounts/test-account/Calls.json', 'POST', data={
-                'From': '+12345', 'Url': url},
+                'From': '+12345', 'Url': self.twiml_server.url},
             error={
-                'error_type': 'UsageError',
+                'error_type': 'TwilioAPIUsageException',
                 'error_message':
                     "Required field 'To' not supplied",
             })
 
     @inlineCallbacks
     def test_make_call_required_parameters_from(self):
-        addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (
-            addr.host, addr.port, '/twiml/', 'example.xml')
-
         # Can't use the client here because it requires the required parameters
         yield self.assert_parameter_missing(
             '/Accounts/test-account/Calls.json', 'POST', data={
-                'To': '+12345', 'Url': url},
+                'To': '+12345', 'Url': self.twiml_server.url},
             error={
-                'error_type': 'UsageError',
+                'error_type': 'TwilioAPIUsageException',
                 'error_message':
                     "Required field 'From' not supplied",
             })
 
     @inlineCallbacks
     def test_make_call_required_parameters_url(self):
-        addr = self.twiml_connection.getHost()
-        url = 'http://%s:%s%s%s' % (
-            addr.host, addr.port, '/twiml/', 'example.xml')
-
         # Can't use the client here because it requires the required parameters
         yield self.assert_parameter_missing(
             '/Accounts/test-account/Calls.json', 'POST', data={
                 'To': '+12345', 'From': '+54321'},
             error={
-                'error_type': 'UsageError',
+                'error_type': 'TwilioAPIUsageException',
                 'error_message':
                     "Request must have an 'Url' or an 'ApplicationSid' field",
             })
 
         response = yield self._server_request(
             '/Accounts/test-account/Calls.json', method='POST',
-            data={'To': '+12345', 'From': '+54321', 'Url': url})
+            data={
+                'To': '+12345',
+                'From': '+54321',
+                'Url': self.twiml_server.url})
         self.assertEqual(response.code, 200)
         response = yield response.json()
         self.assertEqual(response['to'], '+12345')
@@ -322,7 +309,7 @@ class TestTwilioAPIServer(VumiTestCase):
             TwilioRestException)
         self.assertEqual(e.status, 400)
         message = json.loads(e.msg)
-        self.assertEqual(message['error_type'], 'UsageError')
+        self.assertEqual(message['error_type'], 'TwilioAPIUsageException')
         self.assertEqual(
             message['error_message'],
             "SendDigits value '0a*' is not valid. May only contain the "
@@ -347,27 +334,158 @@ class TestTwilioAPIServer(VumiTestCase):
             TwilioRestException)
         self.assertEqual(e.status, 400)
         message = json.loads(e.msg)
-        self.assertEqual(message['error_type'], 'UsageError')
+        self.assertEqual(message['error_type'], 'TwilioAPIUsageException')
         self.assertEqual(
             message['error_message'],
             "IfMachine value must be one of [None, 'Continue', 'Hangup']")
+
+    @inlineCallbacks
+    def test_make_call_ack_fallback_url(self):
+        self.twiml_server.add_err('err.xml', 'Error response')
+        response = twiml.Response()
+        self.twiml_server.add_response('default.xml', response)
+        yield self._twilio_client_create_call(
+            'err.xml', from_='+12345', to='+54321',
+            fallback_url='default.xml')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [bad, req] = self.twiml_server.requests
+        self.assertEqual(req['filename'], 'default.xml')
+        self.assertEqual(bad['filename'], 'err.xml')
+
+    @inlineCallbacks
+    def test_make_call_ack_response(self):
+        response = twiml.Response()
+        self.twiml_server.add_response('default.xml', response)
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [req] = self.twiml_server.requests
+        self.assertEqual(req['filename'], 'default.xml')
+        self.assertEqual(req['request'].args['CallStatus'], ['in-progress'])
+
+    @inlineCallbacks
+    def test_make_call_nack_response(self):
+        response = twiml.Response()
+        self.twiml_server.add_response('default.xml', response)
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_nack(msg))
+        [req] = self.twiml_server.requests
+        self.assertEqual(req['filename'], 'default.xml')
+        self.assertEqual(req['request'].args['CallStatus'], ['failed'])
+
+    @inlineCallbacks
+    def test_make_call_parsing_twiml(self):
+        response = twiml.Response()
+        response.say('foobar')
+        self.twiml_server.add_response('default.xml', response)
+
+        twimls = []
+
+        def parse_Say(twiml):
+            twimls.append(twiml)
+        self.worker.twiml_parser._parse_Say = parse_Say
+
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [command] = twimls
+        self.assertEqual(command.tag, 'Say')
+        self.assertEqual(command.text, 'foobar')
+
+    @inlineCallbacks
+    def test_receive_call(self):
+        response = twiml.Response()
+        self.twiml_server.add_response('', response)
+        msg = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event=TransportUserMessage.SESSION_NEW)
+        yield self.app_helper.dispatch_inbound(msg)
+        [req] = self.twiml_server.requests
+        self.assertEqual(req['filename'], '')
+        self.assertEqual(req['request'].args['Direction'], ['inbound'])
+
+    @inlineCallbacks
+    def test_receive_call_parsing_twiml(self):
+        response = twiml.Response()
+        response.say('foobar')
+        self.twiml_server.add_response('', response)
+
+        twimls = []
+
+        def parse_say(twiml):
+            twimls.append(twiml)
+        self.worker.twiml_parser._parse_Say = parse_say
+
+        msg = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event=TransportUserMessage.SESSION_NEW)
+        yield self.app_helper.dispatch_inbound(msg)
+        [verb] = twimls
+        self.assertEqual(verb.tag, 'Say')
+        self.assertEqual(verb.text, 'foobar')
+
+    @inlineCallbacks
+    def test_outgoing_call_ended_status_callback(self):
+        self.twiml_server.add_response('callback.xml', twiml.Response())
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321',
+            status_callback='callback.xml')
+
+        msg = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event=TransportUserMessage.SESSION_CLOSE)
+        yield self.app_helper.dispatch_inbound(msg)
+        [callback] = self.twiml_server.requests
+        self.assertEqual(callback['filename'], 'callback.xml')
+        self.assertEqual(callback['request'].args['CallStatus'], ['completed'])
+        sessions = yield self.worker.session_manager.active_sessions()
+        self.assertEqual(len(sessions), 0)
+
+    @inlineCallbacks
+    def test_incoming_call_ended_status_callback(self):
+        self.twiml_server.add_response('', twiml.Response())
+        self.twiml_server.add_response('callback.xml', twiml.Response())
+
+        msg_start = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event=TransportUserMessage.SESSION_NEW)
+        msg_end = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event=TransportUserMessage.SESSION_CLOSE)
+
+        yield self.app_helper.dispatch_inbound(msg_start)
+        yield self.app_helper.dispatch_inbound(msg_end)
+
+        [_, callback] = self.twiml_server.requests
+        self.assertEqual(callback['filename'], 'callback.xml')
+        self.assertEqual(callback['request'].args['CallStatus'], ['completed'])
+        sessions = yield self.worker.session_manager.active_sessions()
+        self.assertEqual(len(sessions), 0)
 
 
 class TestServerFormatting(TestCase):
 
     def test_format_xml(self):
-        format_xml = TwilioAPIServer.format_xml
-        res = format_xml({
-            'foo': {
+        o = Response(
+            foo={
                 'bar': {
                     'baz': 'qux',
                 },
                 'foobar': 'bazqux',
             },
-            'barfoo': 'quxbaz',
-        })
-        root = ET.fromstring(res)
-        self.assertEqual(root.tag, 'TwilioResponse')
+            barfoo='quxbaz',
+        )
+
+        res = o.format_xml()
+        response = ET.fromstring(res)
+        self.assertEqual(response.tag, 'TwilioResponse')
+        [root] = list(response)
+        self.assertEqual(root.tag, "Response")
         [barfoo, foo] = sorted(root, key=lambda c: c.tag)
         self.assertEqual(foo.tag, 'foo')
         self.assertEqual(barfoo.tag, 'barfoo')
@@ -381,19 +499,17 @@ class TestServerFormatting(TestCase):
         self.assertEqual(baz.text, 'qux')
 
     def test_format_json(self):
-        format_json = TwilioAPIServer.format_json
-        d = {
-            'Root': {
-                'Foo': {
-                    'Bar': {
-                        'Baz': 'Qux',
-                    },
-                    'FooBar': 'BazQux',
+        o = Response(
+            Foo={
+                'Bar': {
+                    'Baz': 'Qux',
                 },
-                'BarFoo': 'QuxBaz',
-            }
-        }
-        res = format_json(d)
+                'FooBar': 'BazQux',
+            },
+            BarFoo='QuxBaz',
+        )
+
+        res = o.format_json()
         root = json.loads(res)
         expected = {
             'foo': {

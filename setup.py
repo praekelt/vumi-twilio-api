@@ -14,6 +14,7 @@ setup(
     install_requires=[
         'vumi',
         'klein',
+        'treq',
     ],
     classifiers=[
         'Development Status :: 4 - Beta',

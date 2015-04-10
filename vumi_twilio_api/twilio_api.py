@@ -4,13 +4,17 @@ import json
 from klein import Klein
 import os
 import re
+import treq
 from twisted.internet.defer import inlineCallbacks, returnValue
 import uuid
 from vumi.application import ApplicationWorker
 from vumi.components.session import SessionManager
 from vumi.config import ConfigDict, ConfigInt, ConfigText
 from vumi.message import TransportUserMessage
+from vumi.persist.txredis_manager import TxRedisManager
 import xml.etree.ElementTree as ET
+
+from vumi_twilio_api.twiml_parser import TwiMLParser
 
 
 c2s = re.compile('(?!^)([A-Z+])')
@@ -30,6 +34,26 @@ def convert_dict_keys(dct):
     return res
 
 
+class SessionIDLookup(object):
+    def __init__(self, redis_manager, expiry_time, namespace):
+        self._redis_manager = redis_manager
+        self._namespace = namespace
+        self._expiry_time = expiry_time
+
+    def _get_key(self, message_id):
+        return "%s:%s" % (self._namespace, message_id)
+
+    def set_id(self, message_id, address):
+        return self._redis_manager.setex(
+            self._get_key(message_id), self._expiry_time, address)
+
+    def get_address(self, message_id):
+        return self._redis_manager.get(self._get_key(message_id))
+
+    def delete_id(self, message_id):
+        return self._redis_manager.delete(self._get_key(message_id))
+
+
 class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
     """Config for the Twilio API worker"""
     web_path = ConfigText(
@@ -41,7 +65,25 @@ class TwilioAPIConfig(ApplicationWorker.CONFIG_CLASS):
     api_version = ConfigText(
         "The version of the API, used in the api URL",
         default="2010-04-01", static=True)
-    redis_manager = ConfigDict("Redis config.", static=True)
+    redis_manager = ConfigDict("Redis config.", required=True, static=True)
+    redis_timeout = ConfigInt(
+        "Expiry time in seconds for redis keys",
+        default=3600, static=True)
+    session_lookup_namespace = ConfigText(
+        "The redis namespace to use for storing session ID lookups",
+        default="session_id", static=True)
+    client_path = ConfigText(
+        "The web path that the API worker should send requests to",
+        required=True)
+    client_method = ConfigText(
+        "The HTTP method that the API worker uses when sending requests",
+        default='POST')
+    status_callback_path = ConfigText(
+        "The web path that the API sends a request to when the call ends",
+        default=None)
+    status_callback_method = ConfigText(
+        "The HTTP method to use when sending the callback status",
+        default='POST')
 
 
 class TwilioAPIWorker(ApplicationWorker):
@@ -51,20 +93,126 @@ class TwilioAPIWorker(ApplicationWorker):
     @inlineCallbacks
     def setup_application(self):
         """Application specific setup"""
-        self.config = self.get_static_config()
-        self.server = TwilioAPIServer(self, self.config.api_version)
-        path = os.path.join(self.config.web_path, self.config.api_version)
+        self.app_config = self.get_static_config()
+        self.server = TwilioAPIServer(self, self.app_config.api_version)
+        path = os.path.join(
+            self.app_config.web_path, self.app_config.api_version)
         self.webserver = self.start_web_resources([
             (self.server.app.resource(), path)],
-            self.config.web_port)
-        self.session_manager = yield SessionManager.from_redis_config(
-            self.config.redis_manager)
+            self.app_config.web_port)
+        redis = yield TxRedisManager.from_config(self.app_config.redis_manager)
+        self.session_manager = SessionManager(
+            redis, self.app_config.redis_timeout)
+        self.twiml_parser = TwiMLParser()
+        self.session_lookup = SessionIDLookup(
+            redis, self.app_config.redis_timeout,
+            self.app_config.session_lookup_namespace)
 
     @inlineCallbacks
     def teardown_application(self):
         """Clean-up of setup done in `setup_application`"""
         yield self.webserver.loseConnection()
         yield self.session_manager.stop()
+
+    def _http_request(self, url='', method='GET', data={}):
+        return treq.request(method, url, persistent=False, data=data)
+
+    def _request_data_from_session(self, session):
+        return {
+            'CallSid': session['CallId'],
+            'AccountSid': session['AccountSid'],
+            'From': session['From'],
+            'To': session['To'],
+            'CallStatus': session['Status'],
+            'ApiVersion': self.app_config.api_version,
+            'Direction': session['Direction'],
+        }
+
+    @inlineCallbacks
+    def _get_twiml_from_client(self, session):
+        data = self._request_data_from_session(session)
+        twiml_raw = yield self._http_request(
+            session['Url'], session['Method'], data)
+        if twiml_raw.code < 200 or twiml_raw.code >= 300:
+            twiml_raw = yield self._http_request(
+                session['FallbackUrl'], session['FallbackMethod'], data)
+        twiml_raw = yield twiml_raw.content()
+        returnValue(self.twiml_parser.parse(twiml_raw))
+
+    @inlineCallbacks
+    def _handle_connected_call(
+            self, session_id, session, status='in-progress'):
+        # TODO: Support sending ForwardedFrom parameter
+        # TODO: Support sending CallerName parameter
+        # TODO: Support sending geographic data parameters
+        session['Status'] = status
+        self.session_manager.save_session(session_id, session)
+        twiml = yield self._get_twiml_from_client(session)
+        for verb in twiml:
+            self._handle_twiml_verb(verb)
+
+    def _handle_twiml_verb(self, verb):
+        pass
+
+    @inlineCallbacks
+    def consume_ack(self, event):
+        message_id = event['user_message_id']
+        session_id = yield self.session_lookup.get_address(message_id)
+        yield self.session_lookup.delete_id(message_id)
+        session = yield self.session_manager.load_session(session_id)
+
+        if session['Status'] == 'queued':
+            yield self._handle_connected_call(session_id, session)
+
+    @inlineCallbacks
+    def consume_nack(self, event):
+        message_id = event['user_message_id']
+        session_id = yield self.session_lookup.get_address(message_id)
+        yield self.session_lookup.delete_id(message_id)
+        session = yield self.session_manager.load_session(session_id)
+
+        if session['Status'] == 'queued':
+            yield self._handle_connected_call(
+                session_id, session, status='failed')
+
+    @inlineCallbacks
+    def new_session(self, message):
+        yield self.session_lookup.set_id(
+            message['message_id'], message['from_addr'])
+        config = yield self.get_config(message)
+        session = {
+            'CallId': self.server._get_sid(),
+            'AccountSid': self.server._get_sid(),
+            'From': message['from_addr'],
+            'To': message['to_addr'],
+            'Status': 'in-progress',
+            'Direction': 'inbound',
+            'Url': config.client_path,
+            'Method': config.client_method,
+            'StatusCallback': config.status_callback_path,
+            'StatusCallbackMethod': config.status_callback_method,
+        }
+        yield self.session_manager.create_session(
+            message['from_addr'], **session)
+
+        twiml = yield self._get_twiml_from_client(session)
+        for verb in twiml:
+            self._handle_twiml_verb(verb)
+
+    @inlineCallbacks
+    def close_session(self, message):
+        # TODO: Implement call duration parameters
+        # TODO: Implement recording parameters
+        session = yield self.session_manager.load_session(message['from_addr'])
+        yield self.session_manager.clear_session(message['from_addr'])
+        url = session.get('StatusCallback')
+
+        if url and url != 'None':
+            session['Status'] = 'completed'
+            data = self._request_data_from_session(session)
+            yield self._http_request(
+                session['StatusCallback'], session['StatusCallbackMethod'],
+                data)
 
 
 class TwilioAPIUsageException(Exception):
@@ -74,6 +222,61 @@ class TwilioAPIUsageException(Exception):
         self.format_ = format_
 
 
+class Response(object):
+    """Base Response object used for HTTP responses"""
+    name = 'Response'
+
+    def __init__(self, **kw):
+        self._data = kw
+
+    def format_xml(self):
+        response = ET.Element("TwilioResponse")
+        root = ET.SubElement(response, self.name)
+
+        def format_xml_rec(dct, root):
+            for key, value in dct.iteritems():
+                if isinstance(value, dict):
+                    sub = ET.SubElement(root, key)
+                    format_xml_rec(value, sub)
+                else:
+                    sub = ET.SubElement(root, key)
+                    sub.text = value
+            return root
+
+        format_xml_rec(self._data, root)
+        return ET.tostring(response)
+
+    def format_json(self):
+        return json.dumps(convert_dict_keys(self._data))
+
+
+class Error(Response):
+    """Error HTTP response object, returned for incorred API queries"""
+    name = 'Error'
+
+    def __init__(self, error_type, error_message):
+        super(Error, self).__init__(
+            error_type=error_type, error_message=error_message)
+
+    @classmethod
+    def from_exception(cls, exception):
+        return cls(exception.__class__.__name__, exception.message)
+
+
+class Version(Response):
+    """Version HTTP response object, returned for root resource"""
+    name = 'Version'
+
+    def __init__(self, name, uri, **kwargs):
+        super(Version, self).__init__(
+            Name=name, Uri=uri, SubresourceUris=kwargs)
+
+
+class Call(Response):
+    """Call HTTP response object, returned for the Calls resource"""
+    name = 'Call'
+
+
 class TwilioAPIServer(object):
     app = Klein()
 
@@ -81,59 +284,31 @@ class TwilioAPIServer(object):
         self.vumi_worker = vumi_worker
         self.version = version
 
-    @staticmethod
-    def format_xml(dct, root=None):
-        if root is None:
-            root = ET.Element('TwilioResponse')
-        for key, value in dct.iteritems():
-            if isinstance(value, dict):
-                sub = ET.SubElement(root, key)
-                TwilioAPIServer.format_xml(value, root=sub)
-            else:
-                sub = ET.SubElement(root, key)
-                sub.text = value
-        return ET.tostring(root)
-
-    @staticmethod
-    def format_json(dct):
-        _, dct = dct.popitem()
-        return json.dumps(convert_dict_keys(dct))
-
-    def _format_response(self, request, dct, format_):
+    def _format_response(self, request, response, format_):
         format_ = str(format_.lstrip('.').lower()) or 'xml'
         func = getattr(
-            TwilioAPIServer, 'format_' + format_, None)
+            response, 'format_' + format_, None)
         if not func:
             raise TwilioAPIUsageException(
                 '%r is not a valid request format' % format_)
         request.setHeader('Content-Type', 'application/%s' % format_)
-        return func(dct)
+        return func()
 
     @app.handle_errors(TwilioAPIUsageException)
     def usage_exception(self, request, failure):
         request.setResponseCode(400)
         return self._format_response(
-            request, {
-                'Error': {
-                    'error_type': 'UsageError',
-                    'error_message': failure.value.message
-                }
-            },
+            request, Error.from_exception(failure.value),
             failure.value.format_)
 
     @app.route('/', defaults={'format_': ''}, methods=['GET'])
     @app.route('/<string:format_>', methods=['GET'])
     def root(self, request, format_):
-        ret = {
-            'Version': {
-                'Name': self.version,
-                'Uri': '/%s%s' % (self.version, format_),
-                'SubresourceUris': {
-                    'Accounts': '/%s/Accounts%s' % (self.version, format_),
-                },
-            },
-        }
-        return self._format_response(request, ret, format_)
+        version = Version(
+            self.version,
+            '/%s%s' % (self.version, format_),
+            Accounts='/%s/Accounts%s' % (self.version, format_))
+        return self._format_response(request, version, format_)
 
     @app.route(
         '/Accounts/<string:account_sid>/Calls',
@@ -157,6 +332,8 @@ class TwilioAPIServer(object):
         fields['DateCreated'] = self._get_timestamp()
         fields['Uri'] = '/%s/Accounts/%s/Calls/%s' % (
             self.version, account_sid, fields['CallId'])
+        fields['Status'] = 'queued'
+        fields['Direction'] = 'outbound-api'
         message = yield self.vumi_worker.send_to(
             fields['To'], '',
             from_addr=fields['From'],
@@ -164,10 +341,12 @@ class TwilioAPIServer(object):
             to_addr_type=TransportUserMessage.AT_MSISDN,
             from_addr_type=TransportUserMessage.AT_MSISDN
         )
+        yield self.vumi_worker.session_lookup.set_id(
+            message['message_id'], message['to_addr'])
         yield self.vumi_worker.session_manager.create_session(
-            message['message_id'], **fields)
-        returnValue(self._format_response(request, {
-            'Call': {
+            message['to_addr'], **fields)
+        returnValue(self._format_response(request, Call(
+            **{
                 'Sid': fields['CallId'],
                 'DateCreated': fields['DateCreated'],
                 'DateUpdated': fields['DateCreated'],
@@ -178,12 +357,12 @@ class TwilioAPIServer(object):
                 'From': fields['From'],
                 'FormattedFrom': fields['From'],
                 'PhoneNumberSid': None,
-                'Status': 'queued',
+                'Status': fields['Status'],
                 'StartTime': None,
                 'EndTime': None,
                 'Duration': None,
                 'Price': None,
-                'Direction': 'outbound-api',
+                'Direction': fields['Direction'],
                 'AnsweredBy': None,
                 'ApiVersion': self.version,
                 'ForwardedFrom': None,
@@ -194,8 +373,7 @@ class TwilioAPIServer(object):
                         fields['Uri'], format_),
                     'Recordings': '%s/Recordings%s' % (fields['Uri'], format_),
                 }
-            }
-        }, format_))
+            }), format_))
 
     def _get_sid(self):
         return str(uuid.uuid4()).replace('-', '')
