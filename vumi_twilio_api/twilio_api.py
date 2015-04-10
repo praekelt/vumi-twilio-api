@@ -151,22 +151,26 @@ class TwilioAPIWorker(ApplicationWorker):
         for verb in twiml:
             if not verb:
                 continue
-
-            if verb.name == "Play":
+            elif verb.name == "Play":
                 yield self._send_message(verb.nouns[0], session)
+            elif verb.name == "Hangup":
+                yield self._send_message(
+                    None, session, TransportUserMessage.SESSION_CLOSE)
+                yield self.session_manager.clear_session(session_id)
+                break
 
-    def _send_message(self, url, session):
+    def _send_message(self, url, session, session_event=None):
+        helper_metadata = {}
+        if url:
+            helper_metadata['voice'] = {'url': url}
+
         return self.send_to(
             session['To'], '',
             from_addr=session['From'],
-            session_event=None,
+            session_event=session_event,
             to_addr_type=TransportUserMessage.AT_MSISDN,
             from_addr_type=TransportUserMessage.AT_MSISDN,
-            helper_metadata={
-                'voice': {
-                    'url': url,
-                }
-            })
+            helper_metadata=helper_metadata)
 
     @inlineCallbacks
     def consume_ack(self, event):
@@ -188,13 +192,6 @@ class TwilioAPIWorker(ApplicationWorker):
         if session['Status'] == 'queued':
             yield self._handle_connected_call(
                 session_id, session, status='failed')
-
-    def _reply_to_message(self, message, url):
-        return self.reply_to(message, '', helper_metadata={
-            'voice': {
-                'url': url,
-                }
-            })
 
     @inlineCallbacks
     def new_session(self, message):
@@ -220,9 +217,18 @@ class TwilioAPIWorker(ApplicationWorker):
         for verb in twiml:
             if not verb:
                 continue
-
-            if verb.name == "Play":
-                yield self._reply_to_message(message, verb.nouns[0])
+            elif verb.name == "Play":
+                yield self.reply_to(message, '', helper_metadata={
+                    'voice': {
+                        'url': verb.nouns[0],
+                        }
+                    })
+            elif verb.name == "Hangup":
+                yield self.reply_to(
+                    message, '',
+                    session_event=TransportUserMessage.SESSION_CLOSE)
+                yield self.session_manager.clear_session(message['from_addr'])
+                break
 
     @inlineCallbacks
     def close_session(self, message):
