@@ -41,6 +41,15 @@ class Play(Verb):
         }
         return cls(attributes, nouns)
 
+class Hangup(Verb):
+    """Represents the Hangup verb"""
+    name = "Hangup"
+
+    @classmethod
+    def from_xml(cls, xml):
+        """Returns a new Hangup verb from the given ElementTree object"""
+        return cls()
+
 
 class TwiMLParseError(Exception):
     """Raised when trying to parse invalid TwilML"""
@@ -67,3 +76,6 @@ class TwiMLParser(object):
 
     def _parse_play(self, element):
         return Play.from_xml(element)
+
+    def _parse_hangup(self, element):
+        return Hangup.from_xml(element)
