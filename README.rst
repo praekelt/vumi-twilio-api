@@ -8,11 +8,10 @@ Vumi Twilio API
     :scale: 100%
     :target: https://travis-ci.org/praekelt/vumi-twilio-api
 
-.. |coveralls| image:: https://coveralls.io/repos/praekelt/vumi-twilio-api/badge.svg
+.. |coveralls| image:: https://coveralls.io/repos/praekelt/vumi-twilio-api/badge.svg?branch=develop
     :alt: Coverage status
     :scale: 100%
-    :target: https://coveralls.io/r/praekelt/vumi-twilio-api
-
+    :target: https://coveralls.io/r/praekelt/vumi-twilio-api?branch=develop
 
 
 Provides a REST API to vumi that emulates the twilio API.
