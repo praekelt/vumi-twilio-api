@@ -165,7 +165,7 @@ class TwilioAPIWorker(ApplicationWorker):
                 from_addr_type=TransportUserMessage.AT_MSISDN,
                 helper_metadata={
                     'voice': {
-                        'url': verb.nouns[0],
+                        'speech_url': verb.nouns[0],
                     }
                 })
 
@@ -198,7 +198,7 @@ class TwilioAPIWorker(ApplicationWorker):
         if verb.name == "Play":
             yield self.reply_to(message, '', helper_metadata={
                 'voice': {
-                    'url': verb.nouns[0]
+                    'speech_url': verb.nouns[0]
                 }
             })
 
