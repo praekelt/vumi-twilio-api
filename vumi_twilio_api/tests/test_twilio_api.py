@@ -444,7 +444,7 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(reply['to_addr'], '+54321')
 
     @inlineCallbacks
-    def test_make_all_parsing_gather_verb_subverbs(self):
+    def test_make_call_parsing_gather_verb_subverbs(self):
         response = twiml.Response()
         with response.gather() as g:
             g.play('test_url')
@@ -461,6 +461,53 @@ class TestTwilioAPIServer(VumiTestCase):
             reply1['helper_metadata']['voice']['speech_url'], 'test_url')
         self.assertEqual(
             reply2['helper_metadata']['voice']['speech_url'], 'test_url2')
+
+    @inlineCallbacks
+    def test_make_call_parsing_gather_verb_with_reply(self):
+        response = twiml.Response()
+        response.gather(action='reply.xml')
+        self.twiml_server.add_response('default.xml', response)
+        response = twiml.Response()
+        response.play('test_url')
+        self.twiml_server.add_response('reply.xml', response)
+
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [_, rep] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        reply = rep.reply('123')
+        yield self.app_helper.dispatch_inbound(reply)
+        [_, _, play] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        self.assertEqual(
+            play['helper_metadata']['voice']['speech_url'], 'test_url')
+        request = self.twiml_server.requests[-1]
+        self.assertEqual(request['filename'], 'reply.xml')
+        self.assertEqual(request['request'].method, 'POST')
+        self.assertEqual(request['request'].args['Digits'], ['123'])
+
+    @inlineCallbacks
+    def test_make_call_parsing_gather_verb_with_reply_get_request(self):
+        response = twiml.Response()
+        response.gather(action='reply.xml', method='GET')
+        self.twiml_server.add_response('default.xml', response)
+        response = twiml.Response()
+        response.play('test_url')
+        self.twiml_server.add_response('reply.xml', response)
+
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [_, rep] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        reply = rep.reply('123')
+        yield self.app_helper.dispatch_inbound(reply)
+        [_, _, play] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        self.assertEqual(
+            play['helper_metadata']['voice']['speech_url'], 'test_url')
+        request = self.twiml_server.requests[-1]
+        self.assertEqual(request['filename'], 'reply.xml')
+        self.assertEqual(request['request'].method, 'GET')
 
     @inlineCallbacks
     def test_receive_call(self):

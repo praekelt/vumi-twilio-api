@@ -128,8 +128,9 @@ class TwilioAPIWorker(ApplicationWorker):
         }
 
     @inlineCallbacks
-    def _get_twiml_from_client(self, session):
-        data = self._request_data_from_session(session)
+    def _get_twiml_from_client(self, session, data=None):
+        if data is None:
+            data = self._request_data_from_session(session)
         twiml_raw = yield self._http_request(
             session['Url'], session['Method'], data)
         if twiml_raw.code < 200 or twiml_raw.code >= 300:
@@ -141,13 +142,14 @@ class TwilioAPIWorker(ApplicationWorker):
 
     @inlineCallbacks
     def _handle_connected_call(
-            self, session_id, session, status='in-progress'):
+            self, session_id, session, status='in-progress', twiml=None):
         # TODO: Support sending ForwardedFrom parameter
         # TODO: Support sending CallerName parameter
         # TODO: Support sending geographic data parameters
         session['Status'] = status
         self.session_manager.save_session(session_id, session)
-        twiml = yield self._get_twiml_from_client(session)
+        if twiml is None:
+            twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
             if not verb:
                 continue
@@ -192,6 +194,26 @@ class TwilioAPIWorker(ApplicationWorker):
             to_addr_type=TransportUserMessage.AT_MSISDN,
             from_addr_type=TransportUserMessage.AT_MSISDN,
             helper_metadata=helper_metadata)
+
+    @inlineCallbacks
+    def consume_user_message(self, message):
+        # At the moment there is no way to determine whether or not a message
+        # is the result of a wait_for or just a single digit, so if the Gather
+        # data exists inside the current session data, then we assume that it
+        # is the result of a Gather
+        # TODO: Fix this
+        session = yield self.session_manager.load_session(message['from_addr'])
+        if session.get('Gather_Action') and session.get('Gather_Method'):
+            data = self._request_data_from_session(session)
+            data['Digits'] = message['content']
+            twiml = yield self._get_twiml_from_client({
+                'Url': session['Gather_Action'],
+                'Method': session['Gather_Method'],
+                'Fallback_Url': None,
+                'Fallback_Method': None, },
+                data=data)
+            yield self._handle_connected_call(
+                message['from_addr'], session, twiml=twiml)
 
     @inlineCallbacks
     def consume_ack(self, event):
