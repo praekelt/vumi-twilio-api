@@ -408,7 +408,8 @@ class TestTwilioAPIServer(VumiTestCase):
         [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
         yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
         [_, reply] = yield self.app_helper.wait_for_dispatched_outbound(1)
-        self.assertEqual(reply['helper_metadata']['voice']['url'], 'test_url')
+        self.assertEqual(
+            reply['helper_metadata']['voice']['speech_url'], 'test_url')
         self.assertEqual(reply['from_addr'], '+12345')
         self.assertEqual(reply['to_addr'], '+54321')
 
@@ -472,7 +473,8 @@ class TestTwilioAPIServer(VumiTestCase):
         yield self.app_helper.dispatch_inbound(msg)
         [reply] = yield self.app_helper.wait_for_dispatched_outbound(1)
 
-        self.assertEqual(reply['helper_metadata']['voice']['url'], 'test_url')
+        self.assertEqual(
+            reply['helper_metadata']['voice']['speech_url'], 'test_url')
         self.assertEqual(reply['in_reply_to'], msg['message_id'])
 
     @inlineCallbacks

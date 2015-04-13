@@ -162,7 +162,7 @@ class TwilioAPIWorker(ApplicationWorker):
     def _send_message(self, url, session, session_event=None):
         helper_metadata = {}
         if url:
-            helper_metadata['voice'] = {'url': url}
+            helper_metadata['voice'] = {'speech_url': url}
 
         return self.send_to(
             session['To'], '',
@@ -220,7 +220,7 @@ class TwilioAPIWorker(ApplicationWorker):
             elif verb.name == "Play":
                 yield self.reply_to(message, '', helper_metadata={
                     'voice': {
-                        'url': verb.nouns[0],
+                        'speech_url': verb.nouns[0],
                         }
                     })
             elif verb.name == "Hangup":
