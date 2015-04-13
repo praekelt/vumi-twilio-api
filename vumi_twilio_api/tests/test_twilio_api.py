@@ -388,7 +388,8 @@ class TestTwilioAPIServer(VumiTestCase):
         [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
         yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
         [_, reply] = yield self.app_helper.wait_for_dispatched_outbound(1)
-        self.assertEqual(reply['helper_metadata']['voice']['url'], 'test_url')
+        self.assertEqual(
+            reply['helper_metadata']['voice']['speech_url'], 'test_url')
         self.assertEqual(reply['from_addr'], '+12345')
         self.assertEqual(reply['to_addr'], '+54321')
 
@@ -407,6 +408,59 @@ class TestTwilioAPIServer(VumiTestCase):
             reply['session_event'], TransportUserMessage.SESSION_CLOSE)
         self.assertEqual(reply['from_addr'], '+12345')
         self.assertEqual(reply['to_addr'], '+54321')
+
+    @inlineCallbacks
+    def test_make_call_parsing_gather_verb_defaults(self):
+        response = twiml.Response()
+        response.gather()
+        self.twiml_server.add_response('default.xml', response)
+
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [_, reply] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        self.assertEqual(reply['helper_metadata']['voice']['wait_for'], '#')
+        self.assertEqual(reply['from_addr'], '+12345')
+        self.assertEqual(reply['to_addr'], '+54321')
+
+    @inlineCallbacks
+    def test_make_call_parsing_gather_verb_non_defaults(self):
+        response = twiml.Response()
+        response.gather(action='/test_url', method='GET', finishOnKey='*')
+        self.twiml_server.add_response('default.xml', response)
+
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [_, reply] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        self.assertEqual(reply['helper_metadata']['voice']['wait_for'], '*')
+        session = yield self.worker.session_manager.load_session('+54321')
+        self.assertEqual(session['Gather_Method'], 'GET')
+        self.assertEqual(
+            session['Gather_Action'], self.twiml_server.url + 'test_url')
+        self.assertEqual(reply['from_addr'], '+12345')
+        self.assertEqual(reply['to_addr'], '+54321')
+
+    @inlineCallbacks
+    def test_make_all_parsing_gather_verb_subverbs(self):
+        response = twiml.Response()
+        with response.gather() as g:
+            g.play('test_url')
+            g.play('test_url2')
+        print str(response)
+        self.twiml_server.add_response('default.xml', response)
+
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [_, reply1, reply2] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        self.assertEqual(
+            reply1['helper_metadata']['voice']['speech_url'], 'test_url')
+        self.assertEqual(
+                reply2['helper_metadata']['voice']['speech_url'], 'test_url2')
 
     @inlineCallbacks
     def test_receive_call(self):

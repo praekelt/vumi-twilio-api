@@ -152,17 +152,38 @@ class TwilioAPIWorker(ApplicationWorker):
             if not verb:
                 continue
             elif verb.name == "Play":
+                # TODO: Support loop and digit attributes
                 yield self._send_message(verb.nouns[0], session)
             elif verb.name == "Hangup":
                 yield self._send_message(
                     None, session, TransportUserMessage.SESSION_CLOSE)
                 yield self.session_manager.clear_session(session_id)
                 break
+            elif verb.name == "Gather":
+                # TODO: Support timeout and numDigits attributes
+                msgs = []
+                for subverb in verb.nouns:
+                    # TODO: Support Say and Pause subverbs
+                    if subverb.name == "Play":
+                        msgs.append({'speech_url': subverb.nouns[0]})
+                session['Gather_Action'] = verb.attributes['action']
+                session['Gather_Method'] = verb.attributes['method']
+                yield self.session_manager.save_session(session_id, session)
+                if len(msgs) == 0:
+                    msgs.append({'speech_url': None})
+                msgs[-1]['wait_for'] = verb.attributes['finishOnKey']
+                for msg in msgs:
+                    yield self._send_message(
+                        msg['speech_url'], session,
+                        wait_for=msg.get('wait_for'))
+                break
 
-    def _send_message(self, url, session, session_event=None):
-        helper_metadata = {}
-        if url:
-            helper_metadata['voice'] = {'url': url}
+    def _send_message(self, url, session, session_event=None, wait_for=None):
+        helper_metadata = {'voice': {}}
+        if url is not None:
+            helper_metadata['voice']['speech_url'] = url
+        if wait_for is not None:
+            helper_metadata['voice']['wait_for'] = wait_for
 
         return self.send_to(
             session['To'], '',

@@ -42,6 +42,7 @@ class Play(Verb):
         }
         return cls(attributes, nouns)
 
+
 class Hangup(Verb):
     """Represents the Hangup verb"""
     name = "Hangup"
