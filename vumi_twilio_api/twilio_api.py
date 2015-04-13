@@ -272,6 +272,27 @@ class TwilioAPIWorker(ApplicationWorker):
                     session_event=TransportUserMessage.SESSION_CLOSE)
                 yield self.session_manager.clear_session(message['from_addr'])
                 break
+            elif verb.name == "Gather":
+                # TODO: Support timeout and numDigits attributes
+                msgs = []
+                for subverb in verb.nouns:
+                    # TODO: Support Say and Pause subverbs
+                    if subverb.name == "Play":
+                        msgs.append({'speech_url': subverb.nouns[0]})
+                session['Gather_Action'] = verb.attributes['action']
+                session['Gather_Method'] = verb.attributes['method']
+                yield self.session_manager.save_session(
+                    message['from_addr'], session)
+                if len(msgs) == 0:
+                    msgs.append({'speech_url': None})
+                msgs[-1]['wait_for'] = verb.attributes['finishOnKey']
+                for msg in msgs:
+                    yield self.reply_to(message, '', helper_metadata={
+                        'voice': {
+                            'speech_url': msg.get('speech_url'),
+                            'wait_for': msg.get('wait_for'),
+                        }})
+                break
 
     @inlineCallbacks
     def close_session(self, message):
