@@ -449,18 +449,18 @@ class TestTwilioAPIServer(VumiTestCase):
         with response.gather() as g:
             g.play('test_url')
             g.play('test_url2')
-        print str(response)
         self.twiml_server.add_response('default.xml', response)
 
         yield self._twilio_client_create_call(
             'default.xml', from_='+12345', to='+54321')
         [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
         yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
-        [_, reply1, reply2] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        [_, reply1, reply2] = (
+            yield self.app_helper.wait_for_dispatched_outbound(1))
         self.assertEqual(
             reply1['helper_metadata']['voice']['speech_url'], 'test_url')
         self.assertEqual(
-                reply2['helper_metadata']['voice']['speech_url'], 'test_url2')
+            reply2['helper_metadata']['voice']['speech_url'], 'test_url2')
 
     @inlineCallbacks
     def test_receive_call(self):
@@ -486,7 +486,8 @@ class TestTwilioAPIServer(VumiTestCase):
         yield self.app_helper.dispatch_inbound(msg)
         [reply] = yield self.app_helper.wait_for_dispatched_outbound(1)
 
-        self.assertEqual(reply['helper_metadata']['voice']['url'], 'test_url')
+        self.assertEqual(
+            reply['helper_metadata']['voice']['speech_url'], 'test_url')
         self.assertEqual(reply['in_reply_to'], msg['message_id'])
 
     @inlineCallbacks
