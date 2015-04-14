@@ -151,9 +151,7 @@ class TwilioAPIWorker(ApplicationWorker):
         if twiml is None:
             twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
-            if not verb:
-                continue
-            elif verb.name == "Play":
+            if verb.name == "Play":
                 # TODO: Support loop and digit attributes
                 yield self._send_message(verb.nouns[0], session)
             elif verb.name == "Hangup":
@@ -188,7 +186,7 @@ class TwilioAPIWorker(ApplicationWorker):
             helper_metadata['voice']['wait_for'] = wait_for
 
         return self.send_to(
-            session['To'], '',
+            session['To'], None,
             from_addr=session['From'],
             session_event=session_event,
             to_addr_type=TransportUserMessage.AT_MSISDN,
@@ -258,17 +256,15 @@ class TwilioAPIWorker(ApplicationWorker):
 
         twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
-            if not verb:
-                continue
-            elif verb.name == "Play":
-                yield self.reply_to(message, '', helper_metadata={
+            if verb.name == "Play":
+                yield self.reply_to(message, None, helper_metadata={
                     'voice': {
                         'speech_url': verb.nouns[0],
                         }
                     })
             elif verb.name == "Hangup":
                 yield self.reply_to(
-                    message, '',
+                    message, None,
                     session_event=TransportUserMessage.SESSION_CLOSE)
                 yield self.session_manager.clear_session(message['from_addr'])
                 break
