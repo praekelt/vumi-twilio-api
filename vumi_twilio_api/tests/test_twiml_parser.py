@@ -105,7 +105,7 @@ class TestPlay(TestCase):
 
         e = self.assertRaises(TwiMLParseError, Play.from_xml, root)
         self.assertEqual(
-            str(e), "Invalid value 'a' for 'loop' attribute in Play verb. "
+            str(e), "Invalid value 'a' for loop parameter. "
             "Must be an integer.")
 
     def test_play_from_xml_invalid_digits(self):
@@ -189,7 +189,7 @@ class TestGather(TestCase):
             TwiMLParseError, Gather.from_xml, root, 'test_url')
         self.assertEqual(
             str(e), "Invalid value -1 for timeout parameter. "
-            "Must be positive")
+            "Must be >= 0")
 
     def test_gather_from_xml_finishonkey_multiple_chars(self):
         """Should raise an exception for multiple chars in finishOnKey value"""
@@ -225,7 +225,7 @@ class TestGather(TestCase):
             TwiMLParseError, Gather.from_xml, root, 'test_url')
         self.assertEqual(
             str(e), "Invalid value 0 for numDigits parameter. "
-            "Must be >=1")
+            "Must be >= 1")
 
     def test_gather_from_xml_valid_sub_verbs(self):
         """Should have valid sub verbs parsed"""

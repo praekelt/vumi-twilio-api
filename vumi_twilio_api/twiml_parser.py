@@ -23,12 +23,7 @@ class Play(Verb):
         nouns = [xml.text]
 
         loop = xml.attrib.get('loop', 1)
-        try:
-            loop = int(loop)
-        except ValueError:
-            raise TwiMLParseError(
-                "Invalid value %r for 'loop' attribute in Play verb. "
-                "Must be an integer." % loop)
+        loop = check_integer('loop', loop, 0)
 
         digits = xml.attrib.get('digits')
         if not all(cls.digits_re.match(c) for c in (digits or '')):
@@ -53,6 +48,25 @@ class Hangup(Verb):
         return cls()
 
 
+def check_integer(name, integer, minimum=None):
+    """Raises the appropriate error if the value cannot be cast to an int.
+    If minimum is present, raises the appropriate error if the value is less
+    than minimum.
+
+    Returns the processed integer"""
+    try:
+        integer = int(integer)
+    except ValueError:
+        raise TwiMLParseError(
+            "Invalid value %r for %s parameter. Must be an integer."
+            % (integer, name))
+    if minimum is not None and integer < minimum:
+        raise TwiMLParseError(
+            "Invalid value %r for %s parameter. Must be >= %s"
+            % (integer, name, minimum))
+    return integer
+
+
 class Gather(Verb):
     """Represents the Gather verb"""
     name = "Gather"
@@ -72,16 +86,7 @@ class Gather(Verb):
                     method, valid_methods))
 
         timeout = xml.attrib.get('timeout', 5)
-        try:
-            timeout = int(timeout)
-        except ValueError:
-            raise TwiMLParseError(
-                "Invalid value %r for timeout parameter. Must be an integer."
-                % timeout)
-        if timeout < 0:
-            raise TwiMLParseError(
-                "Invalid value %r for timeout parameter. Must be positive"
-                % timeout)
+        timeout = check_integer('timeout', timeout, 0)
 
         finishOnKey = xml.attrib.get('finishOnKey', '#')
         if len(finishOnKey) > 1:
@@ -96,16 +101,7 @@ class Gather(Verb):
 
         numDigits = xml.attrib.get('numDigits', None)
         if numDigits is not None:
-            try:
-                numDigits = int(numDigits)
-            except ValueError:
-                raise TwiMLParseError(
-                    "Invalid value %r for numDigits parameter. "
-                    "Must be an integer." % numDigits)
-            if numDigits < 1:
-                raise TwiMLParseError(
-                    "Invalid value %r for numDigits parameter. Must be >=1"
-                    % numDigits)
+            numDigits = check_integer('numDigits', numDigits, 1)
 
         data = TwiMLParser.from_list(xml, url)
         valid_verbs = ['Say', 'Play']
