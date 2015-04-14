@@ -235,7 +235,7 @@ class TestGather(TestCase):
         self.assertEqual(gather.nouns[0].name, 'Play')
 
     def test_gather_from_xml_invalid_sub_verbs(self):
-        """Shoudl raise an exception for invalid sub verbs"""
+        """Should raise an exception for invalid sub verbs"""
         root = ET.Element("Gather")
         ET.SubElement(root, "Hangup")
         e = self.assertRaises(
