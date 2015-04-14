@@ -158,7 +158,7 @@ class TwilioAPIWorker(ApplicationWorker):
 
         if verb.name == "Play":
             yield self.send_to(
-                session['To'], '',
+                session['To'], None,
                 from_addr=session['From'],
                 session_event=None,
                 to_addr_type=TransportUserMessage.AT_MSISDN,
@@ -196,7 +196,7 @@ class TwilioAPIWorker(ApplicationWorker):
             return
 
         if verb.name == "Play":
-            yield self.reply_to(message, '', helper_metadata={
+            yield self.reply_to(message, None, helper_metadata={
                 'voice': {
                     'speech_url': verb.nouns[0]
                 }
