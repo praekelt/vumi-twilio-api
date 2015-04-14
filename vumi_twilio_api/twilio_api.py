@@ -221,7 +221,7 @@ class TwilioAPIWorker(ApplicationWorker):
                     })
             elif verb.name == "Hangup":
                 yield self.reply_to(
-                    message, '',
+                    message, None,
                     session_event=TransportUserMessage.SESSION_CLOSE)
                 yield self.session_manager.clear_session(message['from_addr'])
                 break
