@@ -149,7 +149,7 @@ class TwilioAPIWorker(ApplicationWorker):
         self.session_manager.save_session(session_id, session)
         twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
-            elif verb.name == "Play":
+            if verb.name == "Play":
                 yield self._send_message(verb.nouns[0], session)
             elif verb.name == "Hangup":
                 yield self._send_message(
@@ -213,9 +213,7 @@ class TwilioAPIWorker(ApplicationWorker):
 
         twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
-            if not verb:
-                continue
-            elif verb.name == "Play":
+            if verb.name == "Play":
                 yield self.reply_to(message, None, helper_metadata={
                     'voice': {
                         'speech_url': verb.nouns[0],
