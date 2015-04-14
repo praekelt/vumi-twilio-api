@@ -16,6 +16,7 @@ import xml.etree.ElementTree as ET
 
 from .helpers import TwiMLServer
 from vumi_twilio_api.twilio_api import TwilioAPIWorker, Response
+from vumi_twilio_api.twiml_parser import Verb
 
 
 class TestTwiMLServer(VumiTestCase):
@@ -387,6 +388,7 @@ class TestTwilioAPIServer(VumiTestCase):
 
         def parse_say(twiml):
             twimls.append(twiml)
+            return Verb()
         self.worker.twiml_parser._parse_say = parse_say
 
         yield self._twilio_client_create_call(
