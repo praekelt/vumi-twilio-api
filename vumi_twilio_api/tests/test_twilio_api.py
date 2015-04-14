@@ -416,6 +416,22 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(reply['to_addr'], '+54321')
 
     @inlineCallbacks
+    def test_make_call_parsing_hangup_verb(self):
+        response = twiml.Response()
+        response.hangup()
+        self.twiml_server.add_response('default.xml', response)
+
+        yield self._twilio_client_create_call(
+            'default.xml', from_='+12345', to='+54321')
+        [msg] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        yield self.app_helper.dispatch_event(self.app_helper.make_ack(msg))
+        [_, reply] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        self.assertEqual(
+            reply['session_event'], TransportUserMessage.SESSION_CLOSE)
+        self.assertEqual(reply['from_addr'], '+12345')
+        self.assertEqual(reply['to_addr'], '+54321')
+
+    @inlineCallbacks
     def test_receive_call(self):
         response = twiml.Response()
         self.twiml_server.add_response('', response)
@@ -462,6 +478,22 @@ class TestTwilioAPIServer(VumiTestCase):
 
         self.assertEqual(
             reply['helper_metadata']['voice']['speech_url'], 'test_url')
+        self.assertEqual(reply['in_reply_to'], msg['message_id'])
+
+    @inlineCallbacks
+    def test_receive_call_parsing_hangup_verb(self):
+        response = twiml.Response()
+        response.hangup()
+        self.twiml_server.add_response('', response)
+
+        msg = self.app_helper.make_inbound(
+            '', from_addr='+54321', to_addr='+12345',
+            session_event=TransportUserMessage.SESSION_NEW)
+        yield self.app_helper.dispatch_inbound(msg)
+        [reply] = yield self.app_helper.wait_for_dispatched_outbound(1)
+
+        self.assertEqual(
+            reply['session_event'], TransportUserMessage.SESSION_CLOSE)
         self.assertEqual(reply['in_reply_to'], msg['message_id'])
 
     @inlineCallbacks
