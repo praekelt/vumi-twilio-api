@@ -103,7 +103,6 @@ class TwilioAPIWorker(ApplicationWorker):
         redis = yield TxRedisManager.from_config(self.app_config.redis_manager)
         self.session_manager = SessionManager(
             redis, self.app_config.redis_timeout)
-        self.twiml_parser = TwiMLParser()
         self.session_lookup = SessionIDLookup(
             redis, self.app_config.redis_timeout,
             self.app_config.session_lookup_namespace)
@@ -129,38 +128,62 @@ class TwilioAPIWorker(ApplicationWorker):
         }
 
     @inlineCallbacks
-    def _get_twiml_from_client(self, session):
-        data = self._request_data_from_session(session)
+    def _get_twiml_from_client(self, session, data=None):
+        if data is None:
+            data = self._request_data_from_session(session)
         twiml_raw = yield self._http_request(
             session['Url'], session['Method'], data)
         if twiml_raw.code < 200 or twiml_raw.code >= 300:
             twiml_raw = yield self._http_request(
                 session['FallbackUrl'], session['FallbackMethod'], data)
         twiml_raw = yield twiml_raw.content()
-        returnValue(self.twiml_parser.parse(twiml_raw))
+        twiml_parser = TwiMLParser(session['Url'])
+        returnValue(twiml_parser.parse(twiml_raw))
 
     @inlineCallbacks
     def _handle_connected_call(
-            self, session_id, session, status='in-progress'):
+            self, session_id, session, status='in-progress', twiml=None):
         # TODO: Support sending ForwardedFrom parameter
         # TODO: Support sending CallerName parameter
         # TODO: Support sending geographic data parameters
         session['Status'] = status
         self.session_manager.save_session(session_id, session)
-        twiml = yield self._get_twiml_from_client(session)
+        if twiml is None:
+            twiml = yield self._get_twiml_from_client(session)
         for verb in twiml:
             if verb.name == "Play":
+                # TODO: Support loop and digit attributes
                 yield self._send_message(verb.nouns[0], session)
             elif verb.name == "Hangup":
                 yield self._send_message(
                     None, session, TransportUserMessage.SESSION_CLOSE)
                 yield self.session_manager.clear_session(session_id)
                 break
+            elif verb.name == "Gather":
+                # TODO: Support timeout and numDigits attributes
+                msgs = []
+                for subverb in verb.nouns:
+                    # TODO: Support Say and Pause subverbs
+                    if subverb.name == "Play":
+                        msgs.append({'speech_url': subverb.nouns[0]})
+                session['Gather_Action'] = verb.attributes['action']
+                session['Gather_Method'] = verb.attributes['method']
+                yield self.session_manager.save_session(session_id, session)
+                if len(msgs) == 0:
+                    msgs.append({'speech_url': None})
+                msgs[-1]['wait_for'] = verb.attributes['finishOnKey']
+                for msg in msgs:
+                    yield self._send_message(
+                        msg['speech_url'], session,
+                        wait_for=msg.get('wait_for'))
+                break
 
-    def _send_message(self, url, session, session_event=None):
-        helper_metadata = {}
-        if url:
-            helper_metadata['voice'] = {'speech_url': url}
+    def _send_message(self, url, session, session_event=None, wait_for=None):
+        helper_metadata = {'voice': {}}
+        if url is not None:
+            helper_metadata['voice']['speech_url'] = url
+        if wait_for is not None:
+            helper_metadata['voice']['wait_for'] = wait_for
 
         return self.send_to(
             session['To'], None,
@@ -169,6 +192,26 @@ class TwilioAPIWorker(ApplicationWorker):
             to_addr_type=TransportUserMessage.AT_MSISDN,
             from_addr_type=TransportUserMessage.AT_MSISDN,
             helper_metadata=helper_metadata)
+
+    @inlineCallbacks
+    def consume_user_message(self, message):
+        # At the moment there is no way to determine whether or not a message
+        # is the result of a wait_for or just a single digit, so if the Gather
+        # data exists inside the current session data, then we assume that it
+        # is the result of a Gather
+        # TODO: Fix this
+        session = yield self.session_manager.load_session(message['from_addr'])
+        if session.get('Gather_Action') and session.get('Gather_Method'):
+            data = self._request_data_from_session(session)
+            data['Digits'] = message['content']
+            twiml = yield self._get_twiml_from_client({
+                'Url': session['Gather_Action'],
+                'Method': session['Gather_Method'],
+                'Fallback_Url': None,
+                'Fallback_Method': None, },
+                data=data)
+            yield self._handle_connected_call(
+                message['from_addr'], session, twiml=twiml)
 
     @inlineCallbacks
     def consume_ack(self, event):
@@ -224,6 +267,27 @@ class TwilioAPIWorker(ApplicationWorker):
                     message, None,
                     session_event=TransportUserMessage.SESSION_CLOSE)
                 yield self.session_manager.clear_session(message['from_addr'])
+                break
+            elif verb.name == "Gather":
+                # TODO: Support timeout and numDigits attributes
+                msgs = []
+                for subverb in verb.nouns:
+                    # TODO: Support Say and Pause subverbs
+                    if subverb.name == "Play":
+                        msgs.append({'speech_url': subverb.nouns[0]})
+                session['Gather_Action'] = verb.attributes['action']
+                session['Gather_Method'] = verb.attributes['method']
+                yield self.session_manager.save_session(
+                    message['from_addr'], session)
+                if len(msgs) == 0:
+                    msgs.append({'speech_url': None})
+                msgs[-1]['wait_for'] = verb.attributes['finishOnKey']
+                for msg in msgs:
+                    yield self.reply_to(message, None, helper_metadata={
+                        'voice': {
+                            'speech_url': msg.get('speech_url'),
+                            'wait_for': msg.get('wait_for'),
+                        }})
                 break
 
     @inlineCallbacks
