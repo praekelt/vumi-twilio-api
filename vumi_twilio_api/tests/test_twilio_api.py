@@ -437,6 +437,7 @@ class TestTwilioAPIServer(VumiTestCase):
 
         def parse_say(twiml):
             twimls.append(twiml)
+            return Verb()
         self.worker.twiml_parser._parse_say = parse_say
 
         msg = self.app_helper.make_inbound(

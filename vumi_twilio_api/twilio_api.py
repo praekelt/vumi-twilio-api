@@ -153,9 +153,6 @@ class TwilioAPIWorker(ApplicationWorker):
 
     @inlineCallbacks
     def _handle_twiml_verb(self, verb, session):
-        if not verb:
-            return
-
         if verb.name == "Play":
             yield self.send_to(
                 session['To'], None,
@@ -192,9 +189,6 @@ class TwilioAPIWorker(ApplicationWorker):
 
     @inlineCallbacks
     def _handle_twiml_verb_reply(self, verb, message):
-        if not verb:
-            return
-
         if verb.name == "Play":
             yield self.reply_to(message, None, helper_metadata={
                 'voice': {
