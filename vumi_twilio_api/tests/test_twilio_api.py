@@ -16,7 +16,6 @@ import xml.etree.ElementTree as ET
 
 from .helpers import TwiMLServer
 from vumi_twilio_api.twilio_api import TwilioAPIWorker, Response
-from vumi_twilio_api.twiml_parser import Verb
 
 
 class TestTwiMLServer(VumiTestCase):
@@ -598,7 +597,8 @@ class TestTwilioAPIServer(VumiTestCase):
             '', from_addr='+54231', to_addr='+12345',
             session_event=TransportUserMessage.SESSION_NEW)
         yield self.app_helper.dispatch_inbound(msg)
-        [gather1, gather2] = yield self.app_helper.wait_for_dispatched_outbound(1)
+        [gather1, gather2] = (
+            yield self.app_helper.wait_for_dispatched_outbound(1))
         self.assertEqual(
             gather1['helper_metadata']['voice']['speech_url'], 'test_url')
         self.assertEqual(
