@@ -283,7 +283,7 @@ class TwilioAPIWorker(ApplicationWorker):
                     msgs.append({'speech_url': None})
                 msgs[-1]['wait_for'] = verb.attributes['finishOnKey']
                 for msg in msgs:
-                    yield self.reply_to(message, '', helper_metadata={
+                    yield self.reply_to(message, None, helper_metadata={
                         'voice': {
                             'speech_url': msg.get('speech_url'),
                             'wait_for': msg.get('wait_for'),
