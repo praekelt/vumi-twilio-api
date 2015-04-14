@@ -418,7 +418,7 @@ class TestTwilioAPIServer(VumiTestCase):
         response = twiml.Response()
         self.twiml_server.add_response('', response)
         msg = self.app_helper.make_inbound(
-            '', from_addr='+54321', to_addr='+12345',
+            None, from_addr='+54321', to_addr='+12345',
             session_event=TransportUserMessage.SESSION_NEW)
         yield self.app_helper.dispatch_inbound(msg)
         [req] = self.twiml_server.requests
@@ -438,7 +438,7 @@ class TestTwilioAPIServer(VumiTestCase):
         self.worker.twiml_parser._parse_say = parse_say
 
         msg = self.app_helper.make_inbound(
-            '', from_addr='+54321', to_addr='+12345',
+            None, from_addr='+54321', to_addr='+12345',
             session_event=TransportUserMessage.SESSION_NEW)
         yield self.app_helper.dispatch_inbound(msg)
         [verb] = twimls
@@ -452,7 +452,7 @@ class TestTwilioAPIServer(VumiTestCase):
         self.twiml_server.add_response('', response)
 
         msg = self.app_helper.make_inbound(
-            '', from_addr='+54321', to_addr='+12345',
+            None, from_addr='+54321', to_addr='+12345',
             session_event=TransportUserMessage.SESSION_NEW)
         yield self.app_helper.dispatch_inbound(msg)
         [reply] = yield self.app_helper.wait_for_dispatched_outbound(1)
@@ -469,7 +469,7 @@ class TestTwilioAPIServer(VumiTestCase):
             status_callback='callback.xml')
 
         msg = self.app_helper.make_inbound(
-            '', from_addr='+54321', to_addr='+12345',
+            None, from_addr='+54321', to_addr='+12345',
             session_event=TransportUserMessage.SESSION_CLOSE)
         yield self.app_helper.dispatch_inbound(msg)
         [callback] = self.twiml_server.requests
@@ -484,10 +484,10 @@ class TestTwilioAPIServer(VumiTestCase):
         self.twiml_server.add_response('callback.xml', twiml.Response())
 
         msg_start = self.app_helper.make_inbound(
-            '', from_addr='+54321', to_addr='+12345',
+            None, from_addr='+54321', to_addr='+12345',
             session_event=TransportUserMessage.SESSION_NEW)
         msg_end = self.app_helper.make_inbound(
-            '', from_addr='+54321', to_addr='+12345',
+            None, from_addr='+54321', to_addr='+12345',
             session_event=TransportUserMessage.SESSION_CLOSE)
 
         yield self.app_helper.dispatch_inbound(msg_start)
