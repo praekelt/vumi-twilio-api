@@ -14,7 +14,7 @@ from vumi.message import TransportUserMessage
 from vumi.persist.txredis_manager import TxRedisManager
 import xml.etree.ElementTree as ET
 
-from vumi_twilio_api.twiml_parser import TwiMLParser
+from vxtwinio.twiml_parser import TwiMLParser
 
 
 c2s = re.compile('(?!^)([A-Z+])')

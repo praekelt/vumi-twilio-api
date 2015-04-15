@@ -2,7 +2,7 @@ from twisted.trial.unittest import TestCase
 from twilio import twiml
 import xml.etree.ElementTree as ET
 
-from vumi_twilio_api.twiml_parser import (
+from vxtwinio.twiml_parser import (
     TwiMLParser, TwiMLParseError, Verb, Play, Hangup, Gather)
 
 

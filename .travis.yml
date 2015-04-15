@@ -14,6 +14,6 @@ install:
   - "python setup.py install"
 script:
   - if [ -z "$NO_COVERAGE" ]; then COVERAGE_CMD="coverage run --source=vumi_twilio_api"; else COVERAGE_CMD=""; fi
-  - $COVERAGE_CMD `which trial` vumi_twilio_api
+  - $COVERAGE_CMD `which trial` vxtwinio
 after_success:
     - if [ -z "$NO_COVERAGE" ]; then coveralls; fi

@@ -15,7 +15,7 @@ from vumi.tests.helpers import VumiTestCase
 import xml.etree.ElementTree as ET
 
 from .helpers import TwiMLServer
-from vumi_twilio_api.twilio_api import TwilioAPIWorker, Response
+from vxtwinio.twilio_api import TwilioAPIWorker, Response
 
 
 class TestTwiMLServer(VumiTestCase):
