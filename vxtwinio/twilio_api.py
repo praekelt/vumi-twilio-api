@@ -437,6 +437,22 @@ class ListResponse(object):
         return json.dumps(attrib)
 
 
+class Applications(ListResponse):
+    """Used for responding with a list of Applications for the Applications
+    resource"""
+    name = 'Applications'
+
+    def __init__(self, url, applications):
+        self.url = url
+        super(Applications, self).__init__(applications)
+
+    def format_xml(self):
+        return super(Applications, self).format_xml(self.url)
+
+    def format_json(self):
+        return super(Applications, self).format_json(self.url)
+
+
 class Error(Response):
     """Error HTTP response object, returned for incorred API queries"""
     name = 'Error'
@@ -496,6 +512,14 @@ class TwilioAPIServer(object):
             '/%s%s' % (self.version, format_),
             Accounts='/%s/Accounts%s' % (self.version, format_))
         return self._format_response(request, version, format_)
+
+    @app.route('/Accounts/<string:account_sid>/Applications',
+        defaults={'format_': ''}, methods=['GET'])
+    @app.route('/Accounts/<string:account_sid>/Applications<string:format_>',
+        methods=['GET'])
+    def get_applications(self, request, account_sid, format_):
+        applications = Applications(request.uri, [])
+        return self._format_response(request, applications, format_)
 
     @app.route(
         '/Accounts/<string:account_sid>/Calls',
