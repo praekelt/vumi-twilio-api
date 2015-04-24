@@ -513,9 +513,11 @@ class TwilioAPIServer(object):
             Accounts='/%s/Accounts%s' % (self.version, format_))
         return self._format_response(request, version, format_)
 
-    @app.route('/Accounts/<string:account_sid>/Applications',
+    @app.route(
+        '/Accounts/<string:account_sid>/Applications',
         defaults={'format_': ''}, methods=['GET'])
-    @app.route('/Accounts/<string:account_sid>/Applications<string:format_>',
+    @app.route(
+        '/Accounts/<string:account_sid>/Applications<string:format_>',
         methods=['GET'])
     def get_applications(self, request, account_sid, format_):
         applications = Applications(request.uri, [])

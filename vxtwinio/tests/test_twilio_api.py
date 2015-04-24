@@ -206,10 +206,14 @@ class TestTwilioAPIServer(VumiTestCase):
             'start': '0',
             'end': '0',
             'uri': '/api/v1/Accounts/test-account/Applications',
-            'firstpageuri': '/api/v1/Accounts/test-account/Applications?Page=0&PageSize=50',
+            'firstpageuri':
+                '/api/v1/Accounts/test-account/Applications?Page=0&'
+                'PageSize=50',
             'nextpageuri': '',
             'previouspageuri': '',
-            'lastpageuri': '/api/v1/Accounts/test-account/Applications?Page=0&PageSize=50',
+            'lastpageuri':
+                '/api/v1/Accounts/test-account/Applications?Page=0&'
+                'PageSize=50',
             })
         self.assertEqual(list(applications), [])
 
@@ -234,10 +238,14 @@ class TestTwilioAPIServer(VumiTestCase):
             'start': '0',
             'end': '0',
             'uri': '/api/v1/Accounts/test-account/Applications.xml',
-            'firstpageuri': '/api/v1/Accounts/test-account/Applications.xml?Page=0&PageSize=50',
+            'firstpageuri':
+                '/api/v1/Accounts/test-account/Applications.xml?Page=0&'
+                'PageSize=50',
             'nextpageuri': '',
             'previouspageuri': '',
-            'lastpageuri': '/api/v1/Accounts/test-account/Applications.xml?Page=0&PageSize=50',
+            'lastpageuri':
+                '/api/v1/Accounts/test-account/Applications.xml?Page=0&'
+                'PageSize=50',
             })
         self.assertEqual(list(applications), [])
 
@@ -258,10 +266,14 @@ class TestTwilioAPIServer(VumiTestCase):
             'start': 0,
             'end': 0,
             'uri': '/api/v1/Accounts/test-account/Applications.json',
-            'first_page_uri': '/api/v1/Accounts/test-account/Applications.json?Page=0&PageSize=50',
+            'first_page_uri':
+                '/api/v1/Accounts/test-account/Applications.json?Page=0&'
+                'PageSize=50',
             'next_page_uri': None,
             'previous_page_uri': None,
-            'last_page_uri': '/api/v1/Accounts/test-account/Applications.json?Page=0&PageSize=50',
+            'last_page_uri':
+                '/api/v1/Accounts/test-account/Applications.json?Page=0&'
+                'PageSize=50',
             'applications': []
             })
 
@@ -963,7 +975,8 @@ class TestListResponse(TestCase):
         [root] = response
         self.assertEqual(root.tag, 'ListResponse')
         self.assertAttributesXML(
-            root.attrib, pagesize=1000, total=1001, uri='test_url', aftersid=998)
+            root.attrib, pagesize=1000, total=1001, uri='test_url',
+            aftersid=998)
         for i in range(1000):
             self.assertEqual(root[i].tag, 'Response')
             self.assertEqual(root[i][0].tag, 'Sid')
@@ -977,7 +990,8 @@ class TestListResponse(TestCase):
         [root] = response
         self.assertEqual(root.tag, 'ListResponse')
         self.assertAttributesXML(
-            root.attrib, pagesize=1000, total=1001, uri='test_url', page=1, start=1000)
+            root.attrib, pagesize=1000, total=1001, uri='test_url', page=1,
+            start=1000)
         [child] = root
         self.assertEqual(child.tag, 'Response')
         [i] = child
@@ -1026,14 +1040,14 @@ class TestListResponse(TestCase):
         o = ListResponse([Response(Sid=str(i)) for i in range(1001)])
         text = o.format_json('test_url', pagesize=1001)
         response = json.loads(text)
-        
+
         self.assertAttributesJSON(
             response, pagesize=1000, total=1001, uri='test_url', aftersid=998)
         sids = [i['sid'] for i in response['list_response']]
 
         text = o.format_json('test_url', pagesize=1001, page=1)
         response = json.loads(text)
-        
+
         self.assertAttributesJSON(
             response, pagesize=1000, total=1001, uri='test_url', page=1,
             start=1000)
