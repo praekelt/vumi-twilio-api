@@ -864,9 +864,9 @@ class TestListResponse(TestCase):
             previouspageuri = '%s?Page=%s&PageSize=%s' % (
                 uri, page - 1, pagesize)
         self.assertEqual(attr['previouspageuri'], previouspageuri)
-        if kw.get('aftersid'):
+        if kw.get('nextpage_aftersid'):
             nextpageuri = '%s?Page=%s&PageSize=%s&AfterSid=%s' % (
-                uri, page + 1, pagesize, kw['aftersid'])
+                uri, page + 1, pagesize, kw['nextpage_aftersid'])
         else:
             nextpageuri = ''
         self.assertEqual(attr['nextpageuri'], nextpageuri)
@@ -896,9 +896,9 @@ class TestListResponse(TestCase):
             previouspageuri = '%s?Page=%s&PageSize=%s' % (
                 uri, page - 1, pagesize)
         self.assertEqual(attr['previous_page_uri'], previouspageuri)
-        if kw.get('aftersid'):
+        if kw.get('nextpage_aftersid'):
             nextpageuri = '%s?Page=%s&PageSize=%s&AfterSid=%s' % (
-                uri, page + 1, pagesize, kw['aftersid'])
+                uri, page + 1, pagesize, kw['nextpage_aftersid'])
         else:
             nextpageuri = None
         self.assertEqual(attr['next_page_uri'], nextpageuri)
@@ -945,7 +945,8 @@ class TestListResponse(TestCase):
         [root] = response
         self.assertEqual(root.tag, 'ListResponse')
         self.assertAttributesXML(
-            root.attrib, pagesize=2, total=3, uri='test_url', aftersid='1')
+            root.attrib, pagesize=2, total=3, uri='test_url',
+            nextpage_aftersid='1')
         for i in range(2):
             self.assertEqual(root[i].tag, 'Response')
             [sid] = root[i]
@@ -976,7 +977,7 @@ class TestListResponse(TestCase):
         self.assertEqual(root.tag, 'ListResponse')
         self.assertAttributesXML(
             root.attrib, pagesize=1000, total=1001, uri='test_url',
-            aftersid=998)
+            nextpage_aftersid=998)
         for i in range(1000):
             self.assertEqual(root[i].tag, 'Response')
             self.assertEqual(root[i][0].tag, 'Sid')
@@ -1023,7 +1024,7 @@ class TestListResponse(TestCase):
         response = json.loads(text)
 
         self.assertAttributesJSON(
-            response, pagesize=2, total=3, uri='test_url', aftersid=1)
+            response, pagesize=2, total=3, uri='test_url', nextpage_aftersid=1)
         data = [{'sid': str(i)} for i in range(2)]
         self.assertEqual(
             sorted(response['list_response'], key=lambda i: i['sid']),
@@ -1042,7 +1043,8 @@ class TestListResponse(TestCase):
         response = json.loads(text)
 
         self.assertAttributesJSON(
-            response, pagesize=1000, total=1001, uri='test_url', aftersid=998)
+            response, pagesize=1000, total=1001, uri='test_url',
+            nextpage_aftersid=998)
         sids = [i['sid'] for i in response['list_response']]
 
         text = o.format_json('test_url', pagesize=1001, page=1)
