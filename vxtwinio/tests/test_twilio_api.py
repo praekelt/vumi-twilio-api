@@ -186,6 +186,86 @@ class TestTwilioAPIServer(VumiTestCase):
         self.assertEqual(error_type.text, 'TwilioAPIUsageException')
 
     @inlineCallbacks
+    def test_applications_root_default_xml(self):
+        response = yield self._server_request(
+            'Accounts/test-account/Applications')
+        self.assertEqual(
+            response.headers.getRawHeaders('content-type'),
+            ['application/xml'])
+        self.assertEqual(response.code, 200)
+        content = yield response.content()
+        root = ET.fromstring(content)
+        self.assertEqual(root.tag, "TwilioResponse")
+        [applications] = list(root)
+        self.assertEqual(applications.tag, 'Applications')
+        self.assertEqual(applications.attrib, {
+            'page': '0',
+            'numpages': '1',
+            'pagesize': '50',
+            'total': '0',
+            'start': '0',
+            'end': '0',
+            'uri': '/api/v1/Accounts/test-account/Applications',
+            'firstpageuri': '/api/v1/Accounts/test-account/Applications?Page=0&PageSize=50',
+            'nextpageuri': '',
+            'previouspageuri': '',
+            'lastpageuri': '/api/v1/Accounts/test-account/Applications?Page=0&PageSize=50',
+            })
+        self.assertEqual(list(applications), [])
+
+    @inlineCallbacks
+    def test_applications_root_xml(self):
+        response = yield self._server_request(
+            'Accounts/test-account/Applications.xml')
+        self.assertEqual(
+            response.headers.getRawHeaders('content-type'),
+            ['application/xml'])
+        self.assertEqual(response.code, 200)
+        content = yield response.content()
+        root = ET.fromstring(content)
+        self.assertEqual(root.tag, "TwilioResponse")
+        [applications] = list(root)
+        self.assertEqual(applications.tag, 'Applications')
+        self.assertEqual(applications.attrib, {
+            'page': '0',
+            'numpages': '1',
+            'pagesize': '50',
+            'total': '0',
+            'start': '0',
+            'end': '0',
+            'uri': '/api/v1/Accounts/test-account/Applications.xml',
+            'firstpageuri': '/api/v1/Accounts/test-account/Applications.xml?Page=0&PageSize=50',
+            'nextpageuri': '',
+            'previouspageuri': '',
+            'lastpageuri': '/api/v1/Accounts/test-account/Applications.xml?Page=0&PageSize=50',
+            })
+        self.assertEqual(list(applications), [])
+
+    @inlineCallbacks
+    def test_applications_root_json(self):
+        response = yield self._server_request(
+            'Accounts/test-account/Applications.json')
+        self.assertEqual(
+            response.headers.getRawHeaders('content-type'),
+            ['application/json'])
+        self.assertEqual(response.code, 200)
+        content = yield response.json()
+        self.assertEqual(content, {
+            'page': 0,
+            'num_pages': 1,
+            'page_size': 50,
+            'total': 0,
+            'start': 0,
+            'end': 0,
+            'uri': '/api/v1/Accounts/test-account/Applications.json',
+            'first_page_uri': '/api/v1/Accounts/test-account/Applications.json?Page=0&PageSize=50',
+            'next_page_uri': None,
+            'previous_page_uri': None,
+            'last_page_uri': '/api/v1/Accounts/test-account/Applications.json?Page=0&PageSize=50',
+            'applications': []
+            })
+
+    @inlineCallbacks
     def test_make_call_sid(self):
         res = self.worker.server._get_sid()
         self.assertTrue(isinstance(res, basestring))
