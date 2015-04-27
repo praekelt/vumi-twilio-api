@@ -2,6 +2,7 @@ from datetime import datetime
 from dateutil.tz import tzutc
 import json
 from klein import Klein
+from math import ceil
 import os
 import re
 import treq
@@ -320,7 +321,8 @@ class Response(object):
     def __init__(self, **kw):
         self._data = kw
 
-    def format_xml(self):
+    @property
+    def xml(self):
         response = ET.Element("TwilioResponse")
         root = ET.SubElement(response, self.name)
 
@@ -335,10 +337,120 @@ class Response(object):
             return root
 
         format_xml_rec(self._data, root)
-        return ET.tostring(response)
+        return response
+
+    def format_xml(self):
+        return ET.tostring(self.xml)
+
+    @property
+    def dictionary(self):
+        return convert_dict_keys(self._data)
 
     def format_json(self):
-        return json.dumps(convert_dict_keys(self._data))
+        return json.dumps(self.dictionary)
+
+    @property
+    def sid(self):
+        return self._data.get("Sid")
+
+
+class ListResponse(object):
+    """Used for responding to API requests with a paginated list"""
+    name = 'ListResponse'
+
+    def __init__(self, items):
+        """
+        :param int pagesize: The number of elements in each returned page
+        :param list items: A list of Response items to be returned
+        """
+        self.items = sorted(items, key=lambda k: k.sid)
+
+    def _get_page_attributes(self, uri, page, pagesize, aftersid):
+        pagesize = min(pagesize, 1000)
+        numpages = int(ceil(len(self.items) * 1.0 / pagesize)) or 1
+        if aftersid is not None:
+            start = (
+                n for n, i in enumerate(self.items) if i.sid > aftersid).next()
+            page = int(start/pagesize)
+        else:
+            start = page * pagesize
+        page_items = self.items[start:start + pagesize]
+        base_uri = uri.split('?')[0]
+        if len(page_items) < pagesize:
+            nextpageuri = None
+        else:
+            nextpageuri = "%s?Page=%s&PageSize=%s&AfterSid=%s" % (
+                base_uri, page + 1, pagesize, page_items[-1].sid)
+        if page == 0:
+            prevpageuri = None
+        else:
+            prevpageuri = "%s?Page=%s&PageSize=%s" % (
+                base_uri, page-1, pagesize)
+        last = numpages - 1
+
+        attributes = {
+            'page': page,
+            'num_pages': numpages,
+            'page_size': pagesize,
+            'total': len(self.items),
+            'start': start,
+            'end': start + len(page_items),
+            'uri': uri,
+            'first_page_uri': '%s?Page=%s&PageSize=%s' % (
+                base_uri, page, pagesize),
+            'next_page_uri': nextpageuri,
+            'previous_page_uri': prevpageuri,
+            'last_page_uri': '%s?Page=%s&PageSize=%s' % (
+                base_uri, last, pagesize),
+        }
+
+        return (attributes, page_items)
+
+    def _format_attributes_for_xml(self, dic):
+        """XML attributes must be strings"""
+        ret = {}
+        for key, value in dic.iteritems():
+            if value is None:
+                value = ''
+            ret[key.replace('_', '')] = str(value)
+        return ret
+
+    def format_xml(self, uri, page=0, pagesize=50, aftersid=None):
+        response = ET.Element("TwilioResponse")
+        root = ET.SubElement(response, self.name)
+
+        root.attrib, page_items = self._get_page_attributes(
+            uri, page, pagesize, aftersid)
+        root.attrib = self._format_attributes_for_xml(root.attrib)
+
+        for obj in page_items:
+            [item] = obj.xml
+            root.append(item)
+
+        return ET.tostring(response)
+
+    def format_json(self, uri, page=0, pagesize=50, aftersid=None):
+        attrib, page_items = self._get_page_attributes(
+            uri, page, pagesize, aftersid)
+        page_items = [item.dictionary for item in page_items]
+        attrib[camel_to_snake(self.name)] = page_items
+        return json.dumps(attrib)
+
+
+class Applications(ListResponse):
+    """Used for responding with a list of Applications for the Applications
+    resource"""
+    name = 'Applications'
+
+    def __init__(self, url, applications):
+        self.url = url
+        super(Applications, self).__init__(applications)
+
+    def format_xml(self):
+        return super(Applications, self).format_xml(self.url)
+
+    def format_json(self):
+        return super(Applications, self).format_json(self.url)
 
 
 class Error(Response):
@@ -400,6 +512,16 @@ class TwilioAPIServer(object):
             '/%s%s' % (self.version, format_),
             Accounts='/%s/Accounts%s' % (self.version, format_))
         return self._format_response(request, version, format_)
+
+    @app.route(
+        '/Accounts/<string:account_sid>/Applications',
+        defaults={'format_': ''}, methods=['GET'])
+    @app.route(
+        '/Accounts/<string:account_sid>/Applications<string:format_>',
+        methods=['GET'])
+    def get_applications(self, request, account_sid, format_):
+        applications = Applications(request.uri, [])
+        return self._format_response(request, applications, format_)
 
     @app.route(
         '/Accounts/<string:account_sid>/Calls',
