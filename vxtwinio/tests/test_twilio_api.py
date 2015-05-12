@@ -202,9 +202,9 @@ class TestTwilioAPIServer(VumiTestCase):
             'page': '0',
             'numpages': '1',
             'pagesize': '50',
-            'total': '0',
+            'total': '1',
             'start': '0',
-            'end': '0',
+            'end': '1',
             'uri': '/api/v1/Accounts/test-account/Applications',
             'firstpageuri':
                 '/api/v1/Accounts/test-account/Applications?Page=0&'
@@ -215,7 +215,9 @@ class TestTwilioAPIServer(VumiTestCase):
                 '/api/v1/Accounts/test-account/Applications?Page=0&'
                 'PageSize=50',
             })
-        self.assertEqual(list(applications), [])
+        [app] = list(applications)
+        self.assertEqual(app.tag, "Application")
+
 
     @inlineCallbacks
     def test_applications_root_xml(self):
@@ -234,9 +236,9 @@ class TestTwilioAPIServer(VumiTestCase):
             'page': '0',
             'numpages': '1',
             'pagesize': '50',
-            'total': '0',
+            'total': '1',
             'start': '0',
-            'end': '0',
+            'end': '1',
             'uri': '/api/v1/Accounts/test-account/Applications.xml',
             'firstpageuri':
                 '/api/v1/Accounts/test-account/Applications.xml?Page=0&'
@@ -247,10 +249,13 @@ class TestTwilioAPIServer(VumiTestCase):
                 '/api/v1/Accounts/test-account/Applications.xml?Page=0&'
                 'PageSize=50',
             })
-        self.assertEqual(list(applications), [])
+        [app] = list(applications)
+        self.assertEqual(app.tag, "Application")
 
     @inlineCallbacks
     def test_applications_root_json(self):
+        self.worker.server._get_timestamp = Mock(
+            return_value='Thu, 01 January 1970 00:00:00 +0000')
         response = yield self._server_request(
             'Accounts/test-account/Applications.json')
         self.assertEqual(
@@ -262,9 +267,9 @@ class TestTwilioAPIServer(VumiTestCase):
             'page': 0,
             'num_pages': 1,
             'page_size': 50,
-            'total': 0,
+            'total': 1,
             'start': 0,
-            'end': 0,
+            'end': 1,
             'uri': '/api/v1/Accounts/test-account/Applications.json',
             'first_page_uri':
                 '/api/v1/Accounts/test-account/Applications.json?Page=0&'
@@ -274,7 +279,28 @@ class TestTwilioAPIServer(VumiTestCase):
             'last_page_uri':
                 '/api/v1/Accounts/test-account/Applications.json?Page=0&'
                 'PageSize=50',
-            'applications': []
+            'applications': [
+                {
+                    'account_sid': 'test-account',
+                    'api_version': 'v1',
+                    'date_created': 'Thu, 01 January 1970 00:00:00 +0000',
+                    'date_updated': 'Thu, 01 January 1970 00:00:00 +0000',
+                    'friendly_name': None,
+                    'sid': 'test-account',
+                    'sms_fallback_method': 'POST',
+                    'sms_fallback_url': None,
+                    'sms_method': 'POST',
+                    'sms_status_callback': None,
+                    'sms_url': None,
+                    'status_callback': None,
+                    'status_callback_method': None,
+                    'uri': '/Accounts/test-account/Applications/test-account.json',
+                    'voice_caller_id_lookup': False,
+                    'voice_fallback_method': 'POST',
+                    'voice_fallback_url': None,
+                    'voice_method': 'POST',
+                    'voice_url': None,
+                }]
             })
 
     @inlineCallbacks
