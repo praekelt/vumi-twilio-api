@@ -94,6 +94,10 @@ class TestTwilioAPIServer(VumiTestCase):
                 self.twiml_server.url, kwargs['status_callback'])
         return deferToThread(
             self.client.calls.create, *args, url=url, **kwargs)
+    
+    def _twilio_client_get_application_list(self, *args, **kwargs):
+        return deferToThread(
+            self.client.applications.list, *args, **kwargs)
 
     def assertRegexpMatches(self, text, regexp, msg=None):
         self.assertTrue(re.search(regexp, text), msg=msg)
@@ -218,6 +222,12 @@ class TestTwilioAPIServer(VumiTestCase):
         [app] = list(applications)
         self.assertEqual(app.tag, "Application")
 
+    @inlineCallbacks
+    def test_applications_root_with_client(self):
+        applications = yield self._twilio_client_get_application_list(friendly_name='test name')
+        [app] = applications
+        self.assertEqual(app.sid, 'test_account')
+        self.assertEqual(app.friendly_name, 'test name')
 
     @inlineCallbacks
     def test_applications_root_xml(self):
