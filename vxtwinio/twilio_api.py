@@ -525,7 +525,30 @@ class TwilioAPIServer(object):
         '/Accounts/<string:account_sid>/Applications<string:format_>',
         methods=['GET'])
     def get_applications(self, request, account_sid, format_):
-        applications = Applications(request.uri, [])
+        application = Application(
+            # Application sid the same as Account sid to ensure consistency
+            # between calls.
+            Sid=account_sid,
+            DateCreated=self._get_timestamp(),
+            DateUpdate=self._get_timestamp(),
+            AccountSid=account_sid,
+            FriendlyName='Vumi Twinio',
+            ApiVersion=self.version,
+            VoiceUrl=None,
+            VoiceMethod='POST',
+            VoiceFallbackUrl=None,
+            VoiceFallbackMethod='POST',
+            StatusCallback=None,
+            StatusCallbackMethod=None,
+            VoiceCallerIdLookup=False,
+            SmsUrl=None,
+            SmsMethod='POST',
+            SmsFallbackUrl=None,
+            SmsFallbackMethod='GET',
+            SmsStatusCallback=None,
+            Uri='/Accounts/%s/Applications/%s%s' % (
+                account_sid, account_sid, format_))
+        applications = Applications(request.uri, [application])
         return self._format_response(request, applications, format_)
 
     @app.route(
