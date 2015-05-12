@@ -453,6 +453,11 @@ class Applications(ListResponse):
         return super(Applications, self).format_json(self.url)
 
 
+class Application(Response):
+    """A single Application object"""
+    name = 'Application'
+
+
 class Error(Response):
     """Error HTTP response object, returned for incorred API queries"""
     name = 'Error'
