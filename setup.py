@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="vxtwinio",
-    version="0.0.4",
+    version="0.0.5a",
     url="https://github.com/praekelt/vumi-twilio-api",
     license="BSD",
     description="Provides a REST API to Vumi that emulates the Twilio API",
