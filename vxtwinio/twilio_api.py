@@ -530,9 +530,9 @@ class TwilioAPIServer(object):
             # between calls.
             Sid=account_sid,
             DateCreated=self._get_timestamp(),
-            DateUpdate=self._get_timestamp(),
+            DateUpdated=self._get_timestamp(),
             AccountSid=account_sid,
-            FriendlyName='Vumi Twinio',
+            FriendlyName=self._get_field(request, 'FriendlyName'),
             ApiVersion=self.version,
             VoiceUrl=None,
             VoiceMethod='POST',
@@ -544,7 +544,7 @@ class TwilioAPIServer(object):
             SmsUrl=None,
             SmsMethod='POST',
             SmsFallbackUrl=None,
-            SmsFallbackMethod='GET',
+            SmsFallbackMethod='POST',
             SmsStatusCallback=None,
             Uri='/Accounts/%s/Applications/%s%s' % (
                 account_sid, account_sid, format_))
