@@ -278,6 +278,38 @@ class TestTwilioAPIServer(VumiTestCase):
             })
 
     @inlineCallbacks
+    def test_incoming_phone_numbers_root_default_xml(self):
+        response = yield self._server_request(
+            'Accounts/test-account/IncomingPhoneNumbers')
+        self.assertEqual(
+            response.headers.getRawHeaders('content-type'),
+            ['application/xml'])
+        self.assertEqual(response.code, 200)
+        content = yield response.content()
+        root = ET.fromstring(content)
+        self.assertEqual(root.tag, "TwilioResponse")
+        [phone_numbers] = list(root)
+        self.assertEqual(phone_numbers.tag, 'IncomingPhoneNumbers')
+        self.assertEqual(phone_numbers.attrib, {
+            'page': '0',
+            'numpages': '1',
+            'pagesize': '50',
+            'total': '0',
+            'start': '0',
+            'end': '0',
+            'uri': '/api/v1/Accounts/test-account/IncomingPhoneNumbers',
+            'firstpageuri': (
+                '/api/v1/Accounts/test-account/IncomingPhoneNumbers?Page=0&'
+                'PageSize=50'),
+            'nextpageuri': '',
+            'previouspageuri': '',
+            'lastpageuri': (
+                '/api/v1/Accounts/test-account/IncomingPhoneNumbers?Page=0&'
+                'PageSize=50'),
+            })
+        self.assertEqual(list(phone_numbers), [])
+
+    @inlineCallbacks
     def test_make_call_sid(self):
         res = self.worker.server._get_sid()
         self.assertTrue(isinstance(res, basestring))
