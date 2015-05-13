@@ -453,6 +453,11 @@ class Applications(ListResponse):
         return super(Applications, self).format_json(self.url)
 
 
+class Application(Response):
+    """A single Application object"""
+    name = 'Application'
+
+
 class Error(Response):
     """Error HTTP response object, returned for incorred API queries"""
     name = 'Error'
@@ -520,7 +525,30 @@ class TwilioAPIServer(object):
         '/Accounts/<string:account_sid>/Applications<string:format_>',
         methods=['GET'])
     def get_applications(self, request, account_sid, format_):
-        applications = Applications(request.uri, [])
+        application = Application(
+            # Application sid the same as Account sid to ensure consistency
+            # between calls.
+            Sid=account_sid,
+            DateCreated=self._get_timestamp(),
+            DateUpdated=self._get_timestamp(),
+            AccountSid=account_sid,
+            FriendlyName=self._get_field(request, 'FriendlyName'),
+            ApiVersion=self.version,
+            VoiceUrl=None,
+            VoiceMethod='POST',
+            VoiceFallbackUrl=None,
+            VoiceFallbackMethod='POST',
+            StatusCallback=None,
+            StatusCallbackMethod=None,
+            VoiceCallerIdLookup=False,
+            SmsUrl=None,
+            SmsMethod='POST',
+            SmsFallbackUrl=None,
+            SmsFallbackMethod='POST',
+            SmsStatusCallback=None,
+            Uri='/Accounts/%s/Applications/%s%s' % (
+                account_sid, account_sid, format_))
+        applications = Applications(request.uri, [application])
         return self._format_response(request, applications, format_)
 
     @app.route(
