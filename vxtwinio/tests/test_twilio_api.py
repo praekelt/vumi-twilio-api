@@ -92,7 +92,7 @@ class TestTwilioAPIServer(VumiTestCase):
                 self.twiml_server.url, kwargs['status_callback'])
         return deferToThread(
             self.client.calls.create, *args, url=url, **kwargs)
-    
+
     def _twilio_client_get_application_list(self, *args, **kwargs):
         return deferToThread(
             self.client.applications.list, *args, **kwargs)
